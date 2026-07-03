@@ -231,6 +231,104 @@ class Orchestrator:
         }
 
     # ------------------------------------------------------------------
+    # 反馈与进化
+    # ------------------------------------------------------------------
+
+    def record_feedback(
+        self,
+        query_text: str,
+        answer_text: str = "",
+        rating: str = "useful",
+        comment: str = "",
+        source_doc_ids: list[str] | None = None,
+    ) -> str:
+        """记录用户对回答的反馈.
+
+        Args:
+            query_text: 用户问题.
+            answer_text: 模型回答.
+            rating: useful / useless / partial.
+            comment: 用户评注.
+            source_doc_ids: 引用的来源文档.
+
+        Returns:
+            反馈 ID.
+        """
+        from knowledge_agent.feedback.collector import FeedbackCollector
+
+        collector = FeedbackCollector()
+        return collector.record(
+            query_text=query_text,
+            answer_text=answer_text,
+            rating=rating,
+            comment=comment,
+            source_doc_ids=source_doc_ids,
+        )
+
+    def get_feedback_stats(self) -> dict:
+        """获取用户反馈统计."""
+        from knowledge_agent.feedback.collector import FeedbackCollector
+
+        collector = FeedbackCollector()
+        return collector.get_stats()
+
+    def get_knowledge_health(self) -> dict:
+        """全面评估知识库健康状况.
+
+        包含：新鲜度评分、质量评分、缺口数量、过期文档数。
+        """
+        from knowledge_agent.feedback.freshness import FreshnessManager
+
+        freshness = FreshnessManager()
+        docs_with_freshness = freshness.get_all_with_freshness()
+        stale = freshness.get_stale_documents()
+
+        return {
+            "total_documents": len(docs_with_freshness),
+            "stale_documents": len(stale),
+            "expired_documents": len(self._quality.check_expired_documents()),
+            "knowledge_gaps": len(self._quality.detect_knowledge_gaps()),
+            "freshness_distribution": {
+                "high (>0.7)": sum(1 for d in docs_with_freshness if d.get("freshness_score", 0) > 0.7),
+                "medium (0.3-0.7)": sum(
+                    1 for d in docs_with_freshness if 0.3 <= d.get("freshness_score", 0) <= 0.7
+                ),
+                "low (<0.3)": sum(1 for d in docs_with_freshness if d.get("freshness_score", 0) < 0.3),
+            },
+        }
+
+    def run_maintenance(self) -> dict:
+        """执行自动维护：识别并报告需要关注的知识条目.
+
+        Returns:
+            维护报告，包含陈旧文档、低质量条目、知识缺口的列表.
+        """
+        from knowledge_agent.feedback.freshness import FreshnessManager
+
+        freshness = FreshnessManager()
+        stale = freshness.get_stale_documents(min_age_days=180, max_references=2)
+
+        return {
+            "stale_documents": [
+                {"filename": d.get("filename", ""), "age_days": d.get("age_days", 0)}
+                for d in stale
+            ],
+            "knowledge_gaps": [
+                {"entity": g.get("entity_name", ""), "connections": g.get("current_connections", 0)}
+                for g in self._quality.detect_knowledge_gaps()
+            ],
+            "expired": [
+                {"filename": d.get("filename", ""), "ingested_at": d.get("ingested_at", "")}
+                for d in self._quality.check_expired_documents()
+            ],
+            "recommendation": (
+                f"Found {len(stale)} stale documents, "
+                f"{len(self._quality.detect_knowledge_gaps())} knowledge gaps, "
+                f"{len(self._quality.check_expired_documents())} expired documents."
+            ),
+        }
+
+    # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
