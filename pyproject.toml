@@ -17,7 +17,7 @@ openai = "^1.50.0"
 fastapi = "^0.115.0"
 uvicorn = {extras = ["standard"], version = "^0.30.0"}
 pypdf = "^5.0.0"
-unstructured = {extras = ["all-docs"], version = "^0.15.0"}
+unstructured = {version = ">=0.10.0", optional = true}
 tiktoken = "^0.7.0"
 rank-bm25 = "^0.2.2"
 sentence-transformers = "^3.1.0"
@@ -27,7 +27,7 @@ click = "^8.1.0"
 rich = "^13.8.0"
 networkx = "^3.3.0"
 python-louvain = "^0.16.0"
-numpy = "^1.26.0"
+numpy = ">=1.26.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
