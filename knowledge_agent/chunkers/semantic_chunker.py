@@ -2,8 +2,6 @@
 
 import re
 
-import tiktoken
-
 from knowledge_agent.chunkers.base import BaseChunker, Chunk
 
 
@@ -15,15 +13,14 @@ class SemanticChunker(BaseChunker):
     as well as Chinese ``。``, ``！``, ``？``).
 
     Sentences are accumulated until the combined token count reaches
-    ``chunk_size``.  The ``chunk_overlap`` controls how many sentences
+    ``chunk_size``.  The ``chunk_overlap`` controls how many **sentences**
     from the end of the previous chunk are repeated at the beginning
-    of the next chunk (measured in **sentences**, not tokens).
+    of the next chunk (measured in sentences, **not** tokens).
     """
 
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 1) -> None:
         self.chunk_size = chunk_size
         self.chunk_overlap = max(0, chunk_overlap)
-        self._encoding = tiktoken.get_encoding("cl100k_base")
 
     # ------------------------------------------------------------------
     # Sentence splitting
@@ -51,7 +48,7 @@ class SemanticChunker(BaseChunker):
     # ------------------------------------------------------------------
 
     def _count_tokens(self, text: str) -> int:
-        return len(self._encoding.encode(text))
+        return self.count_tokens(text)
 
     # ------------------------------------------------------------------
     # Public API

@@ -35,7 +35,10 @@ class FreshnessManager:
             reference_count: 引用次数.
 
         Returns:
-            新鲜度评分 (0.0 ~ 1.0+).
+            新鲜度评分 (0.0 ~ 1.0+)。
+
+            注意：由于引用次数加成 (1+log(1+refs))，评分可能超过 1.0。
+            调用方可按需 clamp 到 [0, 1] 区间。
         """
         age_days = self._parse_age_days(ingested_at)
         ref_bonus = 1.0 + math.log(1.0 + max(reference_count, 0))

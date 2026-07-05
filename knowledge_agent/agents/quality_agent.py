@@ -48,13 +48,17 @@ class QualityAgent:
         Returns:
             过期文档元数据列表.
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=max_age_days)).isoformat()
+        cutoff = datetime.now(timezone.utc) - timedelta(days=max_age_days)
         all_docs = self._doc_store.list_documents()
 
         expired: list[dict[str, Any]] = []
         for doc in all_docs:
-            ingested_at = doc.get("ingested_at", "")
-            if ingested_at and ingested_at < cutoff:
+            ingested_str = doc.get("ingested_at", "")
+            try:
+                ingested_dt = datetime.fromisoformat(ingested_str.replace("Z", "+00:00"))
+            except (ValueError, TypeError):
+                continue
+            if ingested_dt < cutoff:
                 expired.append(doc)
 
         return expired
