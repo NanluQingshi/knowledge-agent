@@ -84,6 +84,14 @@ class VectorStore:
                 f"metadatas={len(metadatas)}, ids={len(ids)}"
             )
 
+        if embeddings:
+            dim = len(embeddings[0])
+            logger.debug(
+                "Adding %d chunks with embedding dimension %d",
+                n,
+                dim,
+            )
+
         documents = [chunk.text for chunk in chunks]
         metadatas_merged: list[dict[str, Any]] = []
         for chunk, meta in zip(chunks, metadatas):
