@@ -128,7 +128,7 @@ class RecursiveChunker(BaseChunker):
 
     def chunk(self, text: str, metadata: dict | None = None) -> list[Chunk]:
         """Split *text* using recursive separator hierarchy."""
-        if not text:
+        if not text or not text.strip():
             return []
 
         raw_chunks = self._split_text(text, list(self.SEPARATORS))

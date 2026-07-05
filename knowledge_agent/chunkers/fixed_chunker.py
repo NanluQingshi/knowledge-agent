@@ -21,7 +21,7 @@ class FixedChunker(BaseChunker):
 
     def chunk(self, text: str, metadata: dict | None = None) -> list[Chunk]:
         """Split *text* into fixed-size token windows."""
-        if not text:
+        if not text or not text.strip():
             return []
 
         tokens = self._encoding.encode(text)

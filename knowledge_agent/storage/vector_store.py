@@ -115,7 +115,7 @@ class VectorStore:
                 {
                     "id": raw["ids"][0][i],
                     "text": raw["documents"][0][i],
-                    "metadata": raw["metadatas"][0][i] if raw["metadatas"] else {},
+                    "metadata": raw["metadatas"][0][i] if (raw["metadatas"] and len(raw["metadatas"][0]) > i) else {},
                     "distance": raw["distances"][0][i] if raw["distances"] else 0.0,
                 }
             )
