@@ -194,14 +194,10 @@ def create_app() -> FastAPI:
         vector_retriever = VectorRetriever(vector_store=vector_store, embedder=embedder)
         bm25_retriever = BM25Retriever()
 
-        # Build BM25 index
-        all_results = vector_store.search(
-            query_embedding=embedder.embed_single(req.question),
-            top_k=vector_store.count(),
-        )
-        corpus = [{"id": r["id"], "text": r["text"], "metadata": r.get("metadata", {})} for r in all_results]
-        if corpus:
-            bm25_retriever.index(corpus)
+        # Build BM25 index — 使用 get_all_documents 避免全量向量扫描
+        all_results = vector_store.get_all_documents()
+        if all_results:
+            bm25_retriever.index(all_results)
 
         hybrid = HybridRetriever(vector_retriever=vector_retriever, bm25_retriever=bm25_retriever)
         agent = QAAgent(hybrid_retriever=hybrid)

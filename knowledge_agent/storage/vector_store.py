@@ -133,6 +133,29 @@ class VectorStore:
         if ids:
             self._collection.delete(ids=ids)
 
+    def get_all_documents(self) -> list[dict[str, Any]]:
+        """获取集合中所有文档（用于 BM25 等需要全量语料的场景）.
+
+        直接读取存储的数据，不做任何向量计算。
+
+        Returns:
+            包含 id、text、metadata 的字典列表.
+        """
+        raw = self._collection.get(include=["documents", "metadatas"])
+        if not raw["ids"]:
+            return []
+
+        results: list[dict[str, Any]] = []
+        for i in range(len(raw["ids"])):
+            results.append(
+                {
+                    "id": raw["ids"][i],
+                    "text": raw["documents"][i] if raw["documents"] else "",
+                    "metadata": raw["metadatas"][i] if raw["metadatas"] else {},
+                }
+            )
+        return results
+
     def count(self) -> int:
         """返回集合中的文档总数.
 

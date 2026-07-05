@@ -151,9 +151,8 @@ def query(question: str, top_k: int) -> None:
 
     # 从 VectorStore 构建 BM25 索引
     if vector_store.count() > 0:
-        # 获取所有文档用于 BM25
-        results = vector_store.search(query_embedding=embedder.embed_single(question), top_k=vector_store.count())
-        corpus = [{"id": r["id"], "text": r["text"], "metadata": r.get("metadata", {})} for r in results]
+        # 获取所有文档用于 BM25 — 使用 get_all_documents 避免全量向量扫描
+        corpus = vector_store.get_all_documents()
         if corpus:
             bm25_retriever.index(corpus)
 
