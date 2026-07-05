@@ -1,10 +1,11 @@
 """程序记忆模块 — 类比技能习惯，存储工作流模板与最佳实践.
 
-以 JSON/YAML 配置形式持久化到本地文件。
+以 JSON 配置形式持久化到本地文件（带文件锁保护）。
 """
 
 from __future__ import annotations
 
+import fcntl
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,6 +18,7 @@ class ProceduralMemory:
     """程序记忆 — 工作流模板、操作步骤与最佳实践.
 
     存储为 JSON 文件，支持模板的增删改查和执行记录的追踪。
+    使用 ``fcntl.flock`` 进行跨进程文件锁保护。
     """
 
     def __init__(self, storage_path: str | None = None) -> None:
@@ -151,14 +153,22 @@ class ProceduralMemory:
     # ------------------------------------------------------------------
 
     def _load(self) -> dict[str, dict[str, Any]]:
-        """从 JSON 文件加载模板."""
-        if self._path.exists():
-            try:
-                return json.loads(self._path.read_text(encoding="utf-8"))
-            except (json.JSONDecodeError, OSError):
-                return {}
-        return {}
+        """从 JSON 文件加载模板（带文件锁）."""
+        if not self._path.exists():
+            return {}
+
+        try:
+            with self._path.open("r", encoding="utf-8") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+                return json.load(f)
+        except (json.JSONDecodeError, OSError):
+            return {}
 
     def _save(self) -> None:
-        """保存模板到 JSON 文件."""
-        self._path.write_text(json.dumps(self._templates, ensure_ascii=False, indent=2), encoding="utf-8")
+        """保存模板到 JSON 文件（带文件锁）."""
+        try:
+            with self._path.open("w", encoding="utf-8") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                json.dump(self._templates, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass
