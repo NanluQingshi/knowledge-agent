@@ -103,7 +103,7 @@ knowledge_agent/
 
 ## Phase 3：多 Agent 协作架构
 
-**目标**：用 LangGraph 实现 4 个 Agent 的协作工作流。
+**目标**：用 4 个 Agent 搭建多 Agent 协作工作流（手动编排；LangGraph 集成规划在后续迭代）。
 
 ### 3.1 Agent 定义
 | Agent | 职责 |
@@ -115,7 +115,7 @@ knowledge_agent/
 
 ### 3.2 工作流
 ```
-Orchestrator (LangGraph StateGraph)
+Orchestrator (manual orchestration)
   ├── Ingest Node → CollectionAgent
   ├── Process Node → ExtractionAgent  
   ├── Query Node → QAAgent
@@ -183,7 +183,7 @@ knowledge_agent/
 |------|------|------|
 | 语言 | Python 3.11+ | AI/ML 生态最完善 |
 | 包管理 | Poetry | 现代 Python 依赖管理 |
-| 编排框架 | LangGraph | 多 Agent 工作流、生态丰富 |
+| 编排框架 | 手动编排（LangGraph 已规划待集成） | 当前手动顺序调用，未来迁移 LangGraph StateGraph |
 | 向量存储 | ChromaDB (MVP) → Milvus (生产) | ChromaDB 零配置快速起步 |
 | 图谱存储 | NetworkX (MVP) → Neo4j (生产) | NetworkX 无需外部服务 |
 | LLM | OpenAI API (兼容 Anthropic) | 多模型适配 |
