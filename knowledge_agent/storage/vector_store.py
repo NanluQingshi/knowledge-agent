@@ -50,6 +50,14 @@ class VectorStore:
         """当前 ChromaDB Collection 实例."""
         return self._collection
 
+    @property
+    def chroma_client(self) -> chromadb.PersistentClient:
+        """底层的 ChromaDB PersistentClient 实例.
+
+        供 EpisodicMemory 等组件复用统一客户端来创建额外的 Collection。
+        """
+        return self._client
+
     def add(
         self,
         chunks: list[Chunk],

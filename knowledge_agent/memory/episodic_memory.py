@@ -9,7 +9,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from knowledge_agent.config import settings
 from knowledge_agent.embeddings.embedder import Embedder
 from knowledge_agent.storage.vector_store import VectorStore
 
@@ -19,6 +18,9 @@ class EpisodicMemory:
 
     每条记忆以 Chunk 形式存入独立 ChromaDB collection，
     附带时间戳用于时序过滤。
+
+    复用系统 VectorStore 的 ChromaDB 客户端实例，确保
+    所有 ChromaDB 操作共享同一个持久化连接。
     """
 
     _COLLECTION_NAME = "episodic_memory"
@@ -28,18 +30,18 @@ class EpisodicMemory:
         vector_store: VectorStore | None = None,
         embedder: Embedder | None = None,
     ) -> None:
+        """初始化 EpisodicMemory.
+
+        Args:
+            vector_store: 系统的 VectorStore 实例，用于复用 ChromaDB 客户端.
+                          默认新建 VectorStore().
+            embedder: 文本向量化器，默认 Embedder().
+        """
         self._embedder = embedder or Embedder()
         self._vector_store = vector_store or VectorStore()
-        # 使用独立的 collection 存储情景记忆
-        import chromadb
-        from chromadb.utils.embedding_functions import SentenceTransformerEmbeddingFunction
 
-        persist_dir = settings.chroma_persist_dir
-        client = chromadb.PersistentClient(path=persist_dir)
-        ef = SentenceTransformerEmbeddingFunction(model_name="all-MiniLM-L6-v2")
-        self._collection = client.get_or_create_collection(
+        self._collection = self._vector_store.chroma_client.get_or_create_collection(
             name=self._COLLECTION_NAME,
-            embedding_function=ef,
         )
 
     # ------------------------------------------------------------------
