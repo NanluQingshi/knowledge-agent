@@ -18,7 +18,7 @@ from rich.table import Table
 from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 from knowledge_agent.config import settings
 from knowledge_agent.embeddings.embedder import Embedder
-from knowledge_agent.loaders import MarkdownLoader, PDFLoader, TextLoader
+from knowledge_agent.loaders import all_loaders
 from knowledge_agent.loaders.base import Document
 from knowledge_agent.storage.doc_store import DocStore
 from knowledge_agent.storage.vector_store import VectorStore
@@ -26,14 +26,10 @@ from knowledge_agent.storage.vector_store import VectorStore
 console = Console()
 
 
-def _all_loaders() -> list:
-    return [TextLoader(), MarkdownLoader(), PDFLoader()]
-
-
 def _load_documents(path: Path) -> list[Document]:
     """从路径加载文档（支持单文件和目录递归遍历）."""
     docs: list[Document] = []
-    loaders = _all_loaders()
+    loaders = all_loaders()
     files: list[Path] = []
 
     if path.is_file():

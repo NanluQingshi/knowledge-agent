@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 from knowledge_agent.config import settings
 from knowledge_agent.embeddings.embedder import Embedder
-from knowledge_agent.loaders import MarkdownLoader, PDFLoader, TextLoader
+from knowledge_agent.loaders import all_loaders
 from knowledge_agent.loaders.base import Document
 from knowledge_agent.storage.doc_store import DocStore
 from knowledge_agent.storage.vector_store import VectorStore
@@ -57,14 +57,10 @@ class HealthResponse(BaseModel):
     total_chunks: int
 
 
-def _all_loaders() -> list:
-    return [TextLoader(), MarkdownLoader(), PDFLoader()]
-
-
 def _load_documents_from_path(path: Path) -> list[Document]:
     """从路径加载文档."""
     docs: list[Document] = []
-    loaders = _all_loaders()
+    loaders = all_loaders()
     files: list[Path] = []
 
     if path.is_file():
@@ -141,7 +137,7 @@ def create_app() -> FastAPI:
     async def ingest_file(file: UploadFile = File(None)):
         """摄入文档文件."""
         docs: list[Document] = []
-        loaders = _all_loaders()
+        loaders = all_loaders()
 
         if file is None:
             raise HTTPException(status_code=400, detail="No file provided")
