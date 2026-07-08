@@ -27,6 +27,7 @@ rich = "^13.8.0"
 networkx = "^3.3.0"
 python-louvain = "^0.16.0"
 numpy = ">=1.26.0"
+gradio = "^5.0.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
