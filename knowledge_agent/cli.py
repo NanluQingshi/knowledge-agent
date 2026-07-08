@@ -18,7 +18,7 @@ from rich.table import Table
 from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 from knowledge_agent.config import settings
 from knowledge_agent.embeddings.embedder import Embedder
-from knowledge_agent.loaders import MarkdownLoader, PDFLoader, TextLoader
+from knowledge_agent.loaders import all_loaders
 from knowledge_agent.loaders.base import Document
 from knowledge_agent.storage.doc_store import DocStore
 from knowledge_agent.storage.vector_store import VectorStore
@@ -26,14 +26,10 @@ from knowledge_agent.storage.vector_store import VectorStore
 console = Console()
 
 
-def _all_loaders() -> list:
-    return [TextLoader(), MarkdownLoader(), PDFLoader()]
-
-
 def _load_documents(path: Path) -> list[Document]:
     """从路径加载文档（支持单文件和目录递归遍历）."""
     docs: list[Document] = []
-    loaders = _all_loaders()
+    loaders = all_loaders()
     files: list[Path] = []
 
     if path.is_file():
@@ -151,9 +147,8 @@ def query(question: str, top_k: int) -> None:
 
     # 从 VectorStore 构建 BM25 索引
     if vector_store.count() > 0:
-        # 获取所有文档用于 BM25
-        results = vector_store.search(query_embedding=embedder.embed_single(question), top_k=vector_store.count())
-        corpus = [{"id": r["id"], "text": r["text"], "metadata": r.get("metadata", {})} for r in results]
+        # 获取所有文档用于 BM25 — 使用 get_all_documents 避免全量向量扫描
+        corpus = vector_store.get_all_documents()
         if corpus:
             bm25_retriever.index(corpus)
 

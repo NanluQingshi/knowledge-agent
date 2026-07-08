@@ -350,16 +350,9 @@ class Orchestrator:
         # 尝试为 BM25 构建索引
         if vector_store.count() > 0:
             try:
-                all_results = vector_store.search(
-                    query_embedding=embedder.embed_single("index build"),
-                    top_k=vector_store.count(),
-                )
-                corpus = [
-                    {"id": r["id"], "text": r["text"], "metadata": r.get("metadata", {})}
-                    for r in all_results
-                ]
-                if corpus:
-                    bm25_retriever.index(corpus)
+                all_results = vector_store.get_all_documents()
+                if all_results:
+                    bm25_retriever.index(all_results)
             except Exception:
                 pass
 

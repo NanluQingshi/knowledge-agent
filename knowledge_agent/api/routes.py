@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 from knowledge_agent.config import settings
 from knowledge_agent.embeddings.embedder import Embedder
-from knowledge_agent.loaders import MarkdownLoader, PDFLoader, TextLoader
+from knowledge_agent.loaders import all_loaders
 from knowledge_agent.loaders.base import Document
 from knowledge_agent.storage.doc_store import DocStore
 from knowledge_agent.storage.vector_store import VectorStore
@@ -57,14 +57,10 @@ class HealthResponse(BaseModel):
     total_chunks: int
 
 
-def _all_loaders() -> list:
-    return [TextLoader(), MarkdownLoader(), PDFLoader()]
-
-
 def _load_documents_from_path(path: Path) -> list[Document]:
     """从路径加载文档."""
     docs: list[Document] = []
-    loaders = _all_loaders()
+    loaders = all_loaders()
     files: list[Path] = []
 
     if path.is_file():
@@ -141,7 +137,7 @@ def create_app() -> FastAPI:
     async def ingest_file(file: UploadFile = File(None)):
         """摄入文档文件."""
         docs: list[Document] = []
-        loaders = _all_loaders()
+        loaders = all_loaders()
 
         if file is None:
             raise HTTPException(status_code=400, detail="No file provided")
@@ -194,14 +190,10 @@ def create_app() -> FastAPI:
         vector_retriever = VectorRetriever(vector_store=vector_store, embedder=embedder)
         bm25_retriever = BM25Retriever()
 
-        # Build BM25 index
-        all_results = vector_store.search(
-            query_embedding=embedder.embed_single(req.question),
-            top_k=vector_store.count(),
-        )
-        corpus = [{"id": r["id"], "text": r["text"], "metadata": r.get("metadata", {})} for r in all_results]
-        if corpus:
-            bm25_retriever.index(corpus)
+        # Build BM25 index — 使用 get_all_documents 避免全量向量扫描
+        all_results = vector_store.get_all_documents()
+        if all_results:
+            bm25_retriever.index(all_results)
 
         hybrid = HybridRetriever(vector_retriever=vector_retriever, bm25_retriever=bm25_retriever)
         agent = QAAgent(hybrid_retriever=hybrid)

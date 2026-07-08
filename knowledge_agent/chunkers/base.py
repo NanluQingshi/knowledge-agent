@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+import tiktoken
+
 
 @dataclass
 class Chunk:
@@ -16,6 +18,8 @@ class Chunk:
 class BaseChunker(ABC):
     """分块器抽象基类 — 所有分块策略需实现 chunk 方法."""
 
+    _ENCODING = tiktoken.get_encoding("cl100k_base")
+
     @abstractmethod
     def chunk(self, text: str, metadata: dict | None = None) -> list[Chunk]:
         """将输入文本切分为 Chunk 列表.
@@ -28,3 +32,15 @@ class BaseChunker(ABC):
             Chunk 对象列表.
         """
         ...
+
+    @staticmethod
+    def count_tokens(text: str) -> int:
+        """计算文本的 token 数量.
+
+        Args:
+            text: 输入文本.
+
+        Returns:
+            token 数量.
+        """
+        return len(BaseChunker._ENCODING.encode(text))

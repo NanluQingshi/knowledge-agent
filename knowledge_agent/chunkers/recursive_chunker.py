@@ -1,7 +1,5 @@
 """Recursive chunking strategy — LangChain-style hierarchical splitting."""
 
-import tiktoken
-
 from knowledge_agent.chunkers.base import BaseChunker, Chunk
 
 
@@ -23,14 +21,13 @@ class RecursiveChunker(BaseChunker):
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 50) -> None:
         self.chunk_size = chunk_size
         self.chunk_overlap = min(chunk_overlap, chunk_size // 2)
-        self._encoding = tiktoken.get_encoding("cl100k_base")
 
     # ------------------------------------------------------------------
     # Token counting helper
     # ------------------------------------------------------------------
 
     def _count_tokens(self, text: str) -> int:
-        return len(self._encoding.encode(text))
+        return self.count_tokens(text)
 
     # ------------------------------------------------------------------
     # Recursive split logic

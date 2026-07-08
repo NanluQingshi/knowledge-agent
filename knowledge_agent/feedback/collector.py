@@ -161,3 +161,52 @@ class FeedbackCollector:
             ).fetchall()
 
         return [dict(row) for row in rows]
+
+    # ------------------------------------------------------------------
+    # 按文档维度的反馈查询
+    # ------------------------------------------------------------------
+
+    def get_stats_for_doc(self, doc_id: str) -> dict[str, Any]:
+        """获取指定文档的反馈统计.
+
+        在 source_doc_ids JSON 字段中搜索包含给定 doc_id 的记录，
+        汇总这些记录中各评级数量。
+
+        Args:
+            doc_id: 文档 ID.
+
+        Returns:
+            包含 total、useful、useless、partial、usefulness_rate 的字典.
+        """
+        with self._connection() as conn:
+            all_rows = conn.execute(
+                "SELECT rating, source_doc_ids FROM feedback",
+            ).fetchall()
+
+        useful = 0
+        useless = 0
+        partial = 0
+
+        for row in all_rows:
+            raw = row["source_doc_ids"]
+            try:
+                ids = json.loads(raw) if isinstance(raw, str) else (raw or [])
+            except (json.JSONDecodeError, TypeError):
+                ids = []
+            if doc_id in ids:
+                rating = row["rating"]
+                if rating == "useful":
+                    useful += 1
+                elif rating == "useless":
+                    useless += 1
+                elif rating == "partial":
+                    partial += 1
+
+        total = useful + useless + partial
+        return {
+            "total_feedback": total,
+            "useful": useful,
+            "useless": useless,
+            "partial": partial,
+            "usefulness_rate": round(useful / total, 4) if total > 0 else 0.5,
+        }

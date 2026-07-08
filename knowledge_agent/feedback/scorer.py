@@ -116,9 +116,16 @@ class KnowledgeScorer:
     # ------------------------------------------------------------------
 
     def _get_usefulness_for_doc(self, doc_id: str) -> float:
-        """从反馈记录中获取文档的有用率."""
+        """从反馈记录中获取指定文档的有用率.
+
+        优先使用按文档粒度的反馈统计；若文档尚无反馈记录，则回退到全局统计。
+        """
         try:
-            stats = self._feedback.get_stats()
-            return stats.get("usefulness_rate", 0.5)
+            doc_stats = self._feedback.get_stats_for_doc(doc_id)
+            if doc_stats["total_feedback"] > 0:
+                return doc_stats["usefulness_rate"]
+            # 文档无反馈记录时回退到全局有用率
+            global_stats = self._feedback.get_stats()
+            return global_stats.get("usefulness_rate", 0.5)
         except Exception:
             return 0.5
