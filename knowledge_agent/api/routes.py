@@ -178,6 +178,42 @@ def create_app() -> FastAPI:
             sources=result["sources"],
         )
 
+    @app.post("/query/stream")
+    async def query_stream_endpoint(req: QueryRequest):
+        """流式问答查询（Server-Sent Events）."""
+        from fastapi.responses import StreamingResponse
+
+        from knowledge_agent.agents.orchestrator import Orchestrator
+
+        orchestrator = _get_orchestrator()
+
+        async def event_stream():
+            # 先发送来源信息
+            # (为简化，先执行一次非流式查询获取 sources)
+            result = orchestrator.run_query(req.question, top_k=req.top_k)
+            import json
+            sources_data = [
+                {"text": s.get("text", "")[:200], "source": s.get("metadata", {}).get("source", "")}
+                for s in result.get("sources", [])
+            ]
+            yield f"data: {json.dumps({'type': 'sources', 'data': sources_data}, ensure_ascii=False)}\n\n"
+
+            # 流式输出回答
+            for chunk in orchestrator.run_query_stream(req.question, top_k=req.top_k):
+                yield f"data: {json.dumps({'type': 'token', 'data': chunk}, ensure_ascii=False)}\n\n"
+
+            yield "data: [DONE]\n\n"
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
     @app.get("/documents", response_model=DocumentListResponse)
     async def list_documents(offset: int = 0, limit: int = 100):
         """列出已摄入的文档（支持分页）.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from pathlib import Path
 from typing import Any
@@ -106,6 +107,13 @@ class CollectionAgent:
                     continue
 
                 for doc in documents:
+                    # 基于内容哈希的去重检测
+                    content_hash = hashlib.sha256(doc.content.encode("utf-8")).hexdigest()
+                    existing = self._doc_store.find_by_hash(content_hash)
+                    if existing:
+                        # 相同内容已存在，跳过
+                        continue
+
                     chunks = self._chunker.chunk(doc.content, doc.metadata)
                     if not chunks:
                         continue
@@ -132,6 +140,7 @@ class CollectionAgent:
                         filename=Path(doc.source).name if doc.source else file_path.name,
                         file_type=file_path.suffix.lower(),
                         chunk_count=len(chunks),
+                        content_hash=content_hash,
                         metadata={
                             "original_metadata": doc.metadata,
                         },
@@ -181,6 +190,18 @@ class CollectionAgent:
             }
 
         meta = metadata or {}
+        content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+        existing = self._doc_store.find_by_hash(content_hash)
+        if existing:
+            return {
+                "documents_loaded": 0,
+                "chunks_created": 0,
+                "files_processed": 0,
+                "errors": [],
+                "skipped": True,
+                "existing_doc_id": existing[0]["id"],
+            }
+
         doc_id = uuid.uuid4().hex
 
         chunks = self._chunker.chunk(text, meta)
@@ -211,6 +232,7 @@ class CollectionAgent:
             filename="raw_text",
             file_type="text",
             chunk_count=len(chunks),
+            content_hash=content_hash,
             metadata=meta,
         )
 

@@ -29,6 +29,13 @@ python-louvain = "^0.16.0"
 numpy = ">=1.26.0"
 gradio = "^5.0.0"
 
+# Evaluation (optional)
+ragas = {version = "^0.2.0", optional = true}
+datasets = {version = "^3.0.0", optional = true}
+
+[tool.poetry.extras]
+eval = ["ragas", "datasets"]
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
 pytest-asyncio = "^0.24.0"

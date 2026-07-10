@@ -17,21 +17,27 @@ class HybridRetriever:
 
     使用 Reciprocal Rank Fusion (RRF) 算法合并两路检索结果，
     权重通过 settings.hybrid_weight_vector 和 settings.hybrid_weight_bm25 配置。
+
+    可选通过 ``reranker`` 参数传入 CrossEncoderReranker 实例，
+    在 RRF 融合后对结果进行二次精排。
     """
 
     def __init__(
         self,
         vector_retriever: VectorRetriever,
         bm25_retriever: BM25Retriever,
+        reranker: Any | None = None,
     ) -> None:
         """初始化 HybridRetriever.
 
         Args:
             vector_retriever: 向量检索器实例.
             bm25_retriever: BM25 检索器实例（需已调用 index()）.
+            reranker: 可选的 CrossEncoderReranker 实例，用于对 RRF 融合结果精排.
         """
         self._vector_retriever = vector_retriever
         self._bm25_retriever = bm25_retriever
+        self._reranker = reranker
 
     def retrieve(
         self,
@@ -116,5 +122,13 @@ class HybridRetriever:
 
         # 按 RRF 得分降序排序，取 top_k
         scored.sort(key=lambda item: item["score"], reverse=True)
+        rrf_results = scored[:k]
 
-        return scored[:k]
+        # 如果有 Cross-Encoder 重排序器，进行二次精排
+        if self._reranker is not None:
+            try:
+                return self._reranker.rerank(query, rrf_results, top_k=k)
+            except Exception:
+                pass
+
+        return rrf_results

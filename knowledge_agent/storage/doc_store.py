@@ -24,12 +24,13 @@ class DocStore:
         filename TEXT NOT NULL,
         file_type TEXT,
         chunk_count INTEGER DEFAULT 0,
+        content_hash TEXT DEFAULT '',
         ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         metadata_json TEXT
     )
     """
 
-    _COLUMNS = ["id", "source", "filename", "file_type", "chunk_count", "ingested_at", "metadata_json"]
+    _COLUMNS = ["id", "source", "filename", "file_type", "chunk_count", "content_hash", "ingested_at", "metadata_json"]
 
     def __init__(self, db_path: str | None = None) -> None:
         """初始化 DocStore.
@@ -62,6 +63,7 @@ class DocStore:
         filename: str,
         file_type: str,
         chunk_count: int,
+        content_hash: str = "",
         metadata: dict[str, Any] | None = None,
     ) -> None:
         """添加一条文档元数据记录.
@@ -72,6 +74,7 @@ class DocStore:
             filename: 文档文件名.
             file_type: 文档类型（如 pdf、md、txt）.
             chunk_count: 文档被切分出的 Chunk 数量.
+            content_hash: 文档内容的 SHA256 哈希（用于去重）.
             metadata: 附加元数据，会被序列化为 JSON 字符串.
 
         Raises:
@@ -80,9 +83,9 @@ class DocStore:
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False)
         with self._connection() as conn:
             conn.execute(
-                """INSERT INTO documents (id, source, filename, file_type, chunk_count, metadata_json)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (doc_id, source, filename, file_type, chunk_count, metadata_json),
+                """INSERT INTO documents (id, source, filename, file_type, chunk_count, content_hash, metadata_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (doc_id, source, filename, file_type, chunk_count, content_hash, metadata_json),
             )
             conn.commit()
 
@@ -126,6 +129,24 @@ class DocStore:
         with self._connection() as conn:
             conn.execute("DELETE FROM documents WHERE id = ?", (doc_id,))
             conn.commit()
+
+    def find_by_hash(self, content_hash: str) -> list[dict[str, Any]]:
+        """根据内容哈希查找文档.
+
+        Args:
+            content_hash: SHA256 内容哈希.
+
+        Returns:
+            匹配的文档列表（可能多条，相同内容来自不同来源）.
+        """
+        if not content_hash:
+            return []
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM documents WHERE content_hash = ? ORDER BY ingested_at DESC",
+                (content_hash,),
+            ).fetchall()
+        return [self._row_to_dict(row) for row in rows]
 
     def get_total_chunks(self) -> int:
         """返回所有文档的 Chunk 总数.

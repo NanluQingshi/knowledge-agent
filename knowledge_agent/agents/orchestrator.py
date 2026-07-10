@@ -22,6 +22,9 @@ from knowledge_agent.retrieval.graphrag_retriever import GraphRAGRetriever
 from knowledge_agent.retrieval.hybrid_retriever import HybridRetriever
 from knowledge_agent.retrieval.vector_retriever import VectorRetriever
 
+from knowledge_agent.memory.episodic_memory import EpisodicMemory
+from knowledge_agent.memory.semantic_memory import SemanticMemory
+
 
 class WorkflowStep(str, Enum):
     """工作流步骤."""
@@ -66,6 +69,14 @@ class Orchestrator:
         self._collection = collection_agent or CollectionAgent()
         self._extraction = extraction_agent or ExtractionAgent()
         self._quality = quality_agent or QualityAgent()
+
+        # 记忆系统
+        self._episodic_memory = EpisodicMemory(
+            vector_store=self._collection._vector_store,
+        )
+        self._semantic_memory = SemanticMemory(
+            graph_store=self._extraction._graph_store,
+        )
 
         # QAAgent 需要检索器 — 默认按需构建
         self._qa_agent = qa_agent  # None 时延迟构建
@@ -124,7 +135,23 @@ class Orchestrator:
             except Exception as exc:
                 result.errors.append({"step": "extract", "error": str(exc)})
 
-        # Step 3: 质检
+        # Step 3: 记忆 — 将抽取结果存入语义记忆
+        if enable_extraction and "extraction" in result.results:
+            try:
+                ext = result.results["extraction"]
+                entities = ext.get("entities_found", 0)
+                relations = ext.get("relations_found", 0)
+                if entities > 0 or relations > 0:
+                    self._episodic_memory.store(
+                        content=f"Ingested documents from {path}, extracted {entities} entities and {relations} relations",
+                        memory_type="action",
+                        metadata={"pipeline_run": True, "path": str(path)},
+                    )
+                result.steps_completed.append("memory_record")
+            except Exception as exc:
+                result.errors.append({"step": "memory", "error": str(exc)})
+
+        # Step 4: 质检
         if enable_quality_check:
             try:
                 expired = self._quality.check_expired_documents(max_age_days=quality_max_age_days)
@@ -193,7 +220,22 @@ class Orchestrator:
             QAAgent.query() 返回的结果字典.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
-        return qa.query(question, top_k=top_k)
+        result = qa.query(question, top_k=top_k)
+
+        # 将问答记录存入情景记忆
+        try:
+            self._episodic_memory.store_conversation(
+                user_message=question,
+                assistant_response=result.get("answer", ""),
+                metadata={
+                    "top_k": top_k,
+                    "use_graphrag": use_graphrag,
+                },
+            )
+        except Exception:
+            pass
+
+        return result
 
     def run_query_stream(
         self,
@@ -426,7 +468,19 @@ class Orchestrator:
             if current_count > self._last_vector_count:
                 self._update_bm25_index()
 
-        hybrid = HybridRetriever(vector_retriever=vector_retriever, bm25_retriever=bm25)
+        # 可选：加载 Cross-Encoder 重排序器
+        reranker = None
+        try:
+            from knowledge_agent.retrieval.reranker import CrossEncoderReranker
+            reranker = CrossEncoderReranker()
+        except Exception:
+            pass
+
+        hybrid = HybridRetriever(
+            vector_retriever=vector_retriever,
+            bm25_retriever=bm25,
+            reranker=reranker,
+        )
         qa = QAAgent(hybrid_retriever=hybrid)
 
         self._qa_agent = qa
