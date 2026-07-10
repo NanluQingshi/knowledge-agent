@@ -256,3 +256,72 @@ class TestOrchestrator:
         assert result.results == {}
         assert result.errors == []
         assert result.summary == ""
+
+    # ------------------------------------------------------------------
+    # delete_document
+    # ------------------------------------------------------------------
+
+    def test_delete_document_calls_delete_chain(self, orchestrator, mock_collection_agent):
+        """delete_document should cascade through vector_store, doc_store, graph_store."""
+        mock_doc = MagicMock()
+        mock_doc.get.return_value = {
+            "id": "test-doc-123",
+            "metadata": {"chunk_ids": ["chunk_1", "chunk_2"]},
+        }
+        mock_collection_agent._doc_store.get_document.return_value = mock_doc.get.return_value
+
+        result = orchestrator.delete_document("test-doc-123")
+        assert result is True
+
+    def test_delete_nonexistent_document(self, orchestrator, mock_collection_agent):
+        mock_collection_agent._doc_store.get_document.return_value = None
+        result = orchestrator.delete_document("nonexistent")
+        assert result is False
+
+    # ------------------------------------------------------------------
+    # BM25 cache
+    # ------------------------------------------------------------------
+
+    def test_bm25_cache_initialized_on_first_query(self, orchestrator):
+        assert orchestrator._bm25_retriever is None
+        assert orchestrator._last_vector_count == 0
+
+    def test_run_pipeline_triggers_bm25_update(self, orchestrator):
+        """After pipeline with documents, BM25 index should be updated."""
+        with patch.object(orchestrator, '_update_bm25_index') as mock_update:
+            result = orchestrator.run_full_pipeline("/path")
+            # ingest has chunks_created > 0, so BM25 update should be called
+            mock_update.assert_called_once()
+
+    def test_run_pipeline_skips_bm25_on_no_docs(self, orchestrator, mock_collection_agent):
+        """When no documents are ingested, BM25 update should be skipped."""
+        mock_collection_agent.ingest_path.return_value = {
+            "documents_loaded": 0,
+            "chunks_created": 0,
+            "files_processed": 0,
+            "errors": [],
+        }
+        with patch.object(orchestrator, '_update_bm25_index') as mock_update:
+            orchestrator.run_full_pipeline("/path")
+            mock_update.assert_not_called()
+
+    # ------------------------------------------------------------------
+    # Memory integration
+    # ------------------------------------------------------------------
+
+    def test_run_query_stores_episodic_memory(self, orchestrator):
+        """Query results should be stored in episodic memory."""
+        with patch.object(orchestrator._episodic_memory, 'store_conversation') as mock_store:
+            orchestrator.run_query("What is AI?", top_k=3)
+            mock_store.assert_called_once()
+            args, kwargs = mock_store.call_args
+            assert kwargs["user_message"] == "What is AI?"
+            assert "42" in kwargs["assistant_response"]
+
+    def test_run_pipeline_stores_action_memory(self, orchestrator):
+        """Pipeline results should be stored in episodic memory as actions."""
+        with patch.object(orchestrator._episodic_memory, 'store') as mock_store:
+            orchestrator.run_full_pipeline("/path")
+            mock_store.assert_called_once()
+            args, kwargs = mock_store.call_args
+            assert kwargs["memory_type"] == "action"

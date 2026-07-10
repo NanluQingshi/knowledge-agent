@@ -87,6 +87,38 @@ class TestDocStore:
         store.add_document("x", "/x.txt", "x.txt", "txt", 2)
         assert store.get_document("x") is not None
 
+    def test_add_document_with_content_hash(self, doc_store):
+        doc_store.add_document(
+            doc_id="hashed_doc",
+            source="/h.txt",
+            filename="h.txt",
+            file_type="txt",
+            chunk_count=3,
+            content_hash="abc123def456",
+        )
+        doc = doc_store.get_document("hashed_doc")
+        assert doc is not None
+        assert doc["content_hash"] == "abc123def456"
+
+    def test_find_by_hash_finds_matching_docs(self, doc_store):
+        doc_store.add_document("a", "/a.txt", "a.txt", "txt", 1, content_hash="hash1")
+        doc_store.add_document("b", "/b.txt", "b.txt", "txt", 2, content_hash="hash2")
+        doc_store.add_document("c", "/c.txt", "c.txt", "txt", 3, content_hash="hash1")
+
+        results = doc_store.find_by_hash("hash1")
+        assert len(results) == 2
+        doc_ids = {r["id"] for r in results}
+        assert doc_ids == {"a", "c"}
+
+    def test_find_by_hash_no_match(self, doc_store):
+        results = doc_store.find_by_hash("nonexistent_hash")
+        assert results == []
+
+    def test_find_by_hash_empty_string(self, doc_store):
+        doc_store.add_document("d", "/d.txt", "d.txt", "txt", 1)
+        results = doc_store.find_by_hash("")
+        assert results == []
+
 
 # ===================================================================
 # VectorStore
