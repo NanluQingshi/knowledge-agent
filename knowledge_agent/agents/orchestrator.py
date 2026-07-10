@@ -70,6 +70,10 @@ class Orchestrator:
         # QAAgent 需要检索器 — 默认按需构建
         self._qa_agent = qa_agent  # None 时延迟构建
 
+        # BM25 检索器缓存 — 增量维护避免每次查询重建
+        self._bm25_retriever: BM25Retriever | None = None
+        self._last_vector_count: int = 0
+
     # ------------------------------------------------------------------
     # 全流程管道
     # ------------------------------------------------------------------
@@ -158,6 +162,14 @@ class Orchestrator:
             parts.append(f"  - {len(result.errors)} error(s) encountered")
 
         result.summary = "\n".join(parts)
+
+        # 采集完成后刷新 BM25 索引缓存
+        if ingest_result.get("chunks_created", 0) > 0:
+            try:
+                self._update_bm25_index()
+            except Exception:
+                pass
+
         return result
 
     # ------------------------------------------------------------------
@@ -329,6 +341,62 @@ class Orchestrator:
         }
 
     # ------------------------------------------------------------------
+    # 文档管理
+    # ------------------------------------------------------------------
+
+    def delete_document(self, doc_id: str) -> bool:
+        """删除指定文档及其关联数据.
+
+        从 VectorStore 中删除对应 chunk，从 DocStore 中删除元数据记录，
+        并从 GraphStore 中移除与该文档关联的图谱数据。
+
+        Args:
+            doc_id: 文档 ID.
+
+        Returns:
+            是否成功删除（文档不存在时返回 False）.
+        """
+        # 1. 从 DocStore 获取文档信息
+        doc = self._collection._doc_store.get_document(doc_id)
+        if doc is None:
+            return False
+
+        chunk_ids_meta = doc.get("metadata", {}).get("chunk_ids", [])
+        if chunk_ids_meta:
+            try:
+                self._collection._vector_store.delete(chunk_ids_meta)
+            except Exception:
+                pass
+        else:
+            # 没有记录 chunk_ids 时，通过 metadata 中的 doc_id 前缀删除
+            try:
+                collection = self._collection._vector_store.collection
+                all_data = collection.get(
+                    where={"doc_id": doc_id},
+                    include=["ids"],
+                )
+                ids_to_delete = all_data.get("ids", [])
+                if ids_to_delete:
+                    self._collection._vector_store.delete(ids_to_delete)
+            except Exception:
+                pass
+
+        # 2. 从 DocStore 删除元数据
+        try:
+            self._collection._doc_store.delete_document(doc_id)
+        except Exception:
+            pass
+
+        # 3. 从 GraphStore 移除关联实体
+        try:
+            entity_id = doc_id.lower().replace("-", "_")
+            self._extraction._graph_store.delete_entity(entity_id)
+        except Exception:
+            pass
+
+        return True
+
+    # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
@@ -345,22 +413,39 @@ class Orchestrator:
         vector_store = VectorStore()
         embedder = Embedder()
         vector_retriever = VectorRetriever(vector_store=vector_store, embedder=embedder)
-        bm25_retriever = BM25Retriever()
 
-        # 尝试为 BM25 构建索引
-        if vector_store.count() > 0:
-            try:
-                all_results = vector_store.get_all_documents()
-                if all_results:
-                    bm25_retriever.index(all_results)
-            except Exception:
-                pass
+        # 使用缓存的 BM25 检索器，必要时刷新
+        bm25 = self._bm25_retriever
+        if bm25 is None:
+            bm25 = BM25Retriever()
+            self._update_bm25_index()
+            self._bm25_retriever = bm25
+        else:
+            # 检查向量库是否有新增数据
+            current_count = vector_store.count()
+            if current_count > self._last_vector_count:
+                self._update_bm25_index()
 
-        hybrid = HybridRetriever(vector_retriever=vector_retriever, bm25_retriever=bm25_retriever)
+        hybrid = HybridRetriever(vector_retriever=vector_retriever, bm25_retriever=bm25)
         qa = QAAgent(hybrid_retriever=hybrid)
-
-        # 如果需要 GraphRAG 增强，可以在此集成
-        # (暂不改变默认检索器，后续 Phase 中深化集成)
 
         self._qa_agent = qa
         return qa
+
+    def _update_bm25_index(self) -> None:
+        """刷新 BM25 索引（增量更新）."""
+        from knowledge_agent.storage.vector_store import VectorStore
+
+        vector_store = VectorStore()
+        current_count = vector_store.count()
+        if current_count == 0:
+            self._last_vector_count = 0
+            return
+
+        if self._bm25_retriever is None:
+            self._bm25_retriever = BM25Retriever()
+
+        corpus = vector_store.get_all_documents()
+        if corpus:
+            self._bm25_retriever.index(corpus)
+            self._last_vector_count = current_count

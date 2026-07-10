@@ -91,7 +91,36 @@ def _list_documents() -> str:
         f"📚 **文档总数**: {total_docs}",
         f"🧩 **分块总数**: {total_chunks}",
     ]
+
+    # 获取具体文档列表
+    from knowledge_agent.storage.doc_store import DocStore
+    docs = DocStore().list_documents()
+    if docs:
+        lines.append("")
+        lines.append("### 文档列表")
+        lines.append("| ID | 文件名 | 类型 | Chunks | 时间 |")
+        lines.append("|----|--------|------|--------|------|")
+        for doc in docs[:50]:
+            doc_id = doc["id"][:8] + "..."
+            lines.append(
+                f"| {doc_id} | {doc['filename']} | {doc['file_type']} | "
+                f"{doc['chunk_count']} | {doc['ingested_at'][:10]} |"
+            )
+        if len(docs) > 50:
+            lines.append(f"\n*... 还有 {len(docs) - 50} 篇文档*")
+
     return "\n".join(lines)
+
+
+def _delete_document(doc_id: str) -> str:
+    """删除指定文档."""
+    if not doc_id or not doc_id.strip():
+        return "请输入文档 ID。"
+    orchestrator = _get_orchestrator()
+    success = orchestrator.delete_document(doc_id.strip())
+    if success:
+        return f"✅ 已删除文档: {doc_id}"
+    return f"❌ 未找到文档: {doc_id}"
 
 
 def _system_health() -> str:
@@ -121,6 +150,18 @@ def _system_health() -> str:
         f"  - 低 (<0.3): {freshness_dist.get('low (<0.3)', 0)}",
     ]
     return "\n".join(lines)
+
+
+def _run_evaluation(mode: str) -> str:
+    """运行 Agent 评估."""
+    from knowledge_agent.evaluation import EvaluationRunner
+
+    runner = EvaluationRunner()
+    if mode == "retrieval":
+        result = runner.evaluate_retrieval(top_k=5)
+    else:
+        result = runner.evaluate_answer_quality(top_k=5)
+    return result.get("summary", result.get("message", "评估完成。"))
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +220,21 @@ def create_ui() -> gr.Blocks:
             # 页面加载时自动显示
             demo.load(_list_documents, outputs=doc_output)
 
+            gr.Markdown("---\n### 🗑️ 删除文档")
+            with gr.Row():
+                delete_input = gr.Textbox(
+                    label="文档 ID",
+                    placeholder="输入要删除的文档 ID...",
+                    scale=3,
+                )
+                delete_btn = gr.Button("删除", variant="stop", scale=1)
+            delete_output = gr.Markdown()
+            delete_btn.click(
+                fn=_delete_document,
+                inputs=delete_input,
+                outputs=delete_output,
+            )
+
         with gr.Tab("📊 系统状态"):
             health_btn = gr.Button("🔄 刷新状态", variant="secondary")
             health_output = gr.Markdown(label="系统健康报告")
@@ -188,6 +244,22 @@ def create_ui() -> gr.Blocks:
                 outputs=health_output,
             )
             demo.load(_system_health, outputs=health_output)
+
+        with gr.Tab("📋 评估"):
+            gr.Markdown("### Agent 性能评估\n对已摄入的知识库进行检索质量和答案质量评估。")
+            with gr.Row():
+                eval_retrieval_btn = gr.Button("🔍 评估检索质量", variant="primary")
+                eval_answer_btn = gr.Button("💬 评估答案质量", variant="primary")
+            eval_output = gr.Markdown(label="评估结果")
+
+            eval_retrieval_btn.click(
+                fn=lambda: _run_evaluation("retrieval"),
+                outputs=eval_output,
+            )
+            eval_answer_btn.click(
+                fn=lambda: _run_evaluation("answer"),
+                outputs=eval_output,
+            )
 
     return demo
 

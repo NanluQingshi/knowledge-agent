@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import uuid
 from pathlib import Path
 from typing import Any
 
@@ -10,12 +9,7 @@ from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 from knowledge_agent.config import settings
-from knowledge_agent.embeddings.embedder import Embedder
-from knowledge_agent.loaders import all_loaders
-from knowledge_agent.loaders.base import Document
-from knowledge_agent.storage.doc_store import DocStore
 from knowledge_agent.storage.vector_store import VectorStore
 
 
@@ -57,71 +51,77 @@ class HealthResponse(BaseModel):
     total_chunks: int
 
 
-def _load_documents_from_path(path: Path) -> list[Document]:
-    """从路径加载文档."""
-    docs: list[Document] = []
-    loaders = all_loaders()
-    files: list[Path] = []
-
-    if path.is_file():
-        files = [path]
-    elif path.is_dir():
-        files = sorted(p for p in path.rglob("*") if p.is_file())
-
-    for fp in files:
-        for loader in loaders:
-            if loader.can_handle(fp):
-                try:
-                    loaded = loader.load(fp)
-                    docs.extend(loaded)
-                except Exception:
-                    continue
-
-    return docs
+class DeleteResponse(BaseModel):
+    status: str
+    message: str
 
 
-def _process_documents(docs: list[Document]) -> int:
-    """分块、向量化并存储文档。返回创建的 chunk 数量."""
-    if not docs:
-        return 0
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
-    chunker = RecursiveChunker()
-    all_chunks = []
-    for doc in docs:
-        chunks = chunker.chunk(doc.content, metadata={
-            "source": doc.source,
-            "filename": doc.metadata.get("filename", ""),
-        })
-        all_chunks.extend(chunks)
+def _get_orchestrator():
+    """延迟导入并返回 Orchestrator 实例."""
+    from knowledge_agent.agents.orchestrator import Orchestrator
 
-    embedder = Embedder()
-    texts = [chunk.text for chunk in all_chunks]
-    embeddings = embedder.embed(texts)
+    return Orchestrator()
 
-    vector_store = VectorStore()
-    chunk_ids = [str(uuid.uuid4()) for _ in all_chunks]
-    metadatas = [{"chunk_index": i, **chunk.metadata} for i, chunk in enumerate(all_chunks)]
-    vector_store.add(chunks=all_chunks, embeddings=embeddings, metadatas=metadatas, ids=chunk_ids)
 
-    doc_store = DocStore()
-    by_source: dict[str, list[str]] = {}
-    for chunk, cid in zip(all_chunks, chunk_ids):
-        src = chunk.metadata.get("source", "unknown")
-        by_source.setdefault(src, []).append(cid)
+# ---------------------------------------------------------------------------
+# 评估端点
+# ---------------------------------------------------------------------------
 
-    for src, cids in by_source.items():
-        fp = Path(src)
-        doc_id = str(uuid.uuid4())
-        doc_store.add_document(
-            doc_id=doc_id,
-            source=src,
-            filename=fp.name,
-            file_type=fp.suffix.lower().lstrip("."),
-            chunk_count=len(cids),
-            metadata={"chunk_ids": cids},
-        )
 
-    return len(all_chunks)
+class EvalRetrievalRequest(BaseModel):
+    top_k: int = settings.retrieval_top_k
+    category: str | None = None
+
+
+class EvalResponse(BaseModel):
+    status: str
+    summary: str
+    num_queries: int
+    details: list[dict[str, Any]] = []
+
+
+@app.post("/evaluate/retrieval", response_model=EvalResponse)
+async def evaluate_retrieval(req: EvalRetrievalRequest):
+    """评估检索质量."""
+    from knowledge_agent.evaluation import EvaluationRunner
+
+    runner = EvaluationRunner()
+    result = runner.evaluate_retrieval(top_k=req.top_k, category=req.category)
+    return EvalResponse(
+        status=result.get("status", "ok"),
+        summary=result.get("summary", ""),
+        num_queries=result.get("num_queries", 0),
+        details=result.get("details", []),
+    )
+
+
+class EvalAnswerRequest(BaseModel):
+    top_k: int = settings.retrieval_top_k
+    category: str | None = None
+
+
+@app.post("/evaluate/answer", response_model=EvalResponse)
+async def evaluate_answer(req: EvalAnswerRequest):
+    """评估答案质量."""
+    from knowledge_agent.evaluation import EvaluationRunner
+
+    runner = EvaluationRunner()
+    result = runner.evaluate_answer_quality(top_k=req.top_k, category=req.category)
+    return EvalResponse(
+        status=result.get("status", "ok"),
+        summary=result.get("summary", ""),
+        num_queries=result.get("num_queries", 0),
+        details=result.get("details", []),
+    )
+
+
+# ---------------------------------------------------------------------------
+# App factory
+# ---------------------------------------------------------------------------
 
 
 def create_app() -> FastAPI:
@@ -136,9 +136,6 @@ def create_app() -> FastAPI:
     @app.post("/ingest", response_model=IngestResponse)
     async def ingest_file(file: UploadFile = File(None)):
         """摄入文档文件."""
-        docs: list[Document] = []
-        loaders = all_loaders()
-
         if file is None:
             raise HTTPException(status_code=400, detail="No file provided")
 
@@ -149,56 +146,32 @@ def create_app() -> FastAPI:
         content = await file.read()
         file_path.write_bytes(content)
 
-        for loader in loaders:
-            if loader.can_handle(file_path):
-                try:
-                    docs = loader.load(file_path)
-                except Exception as exc:
-                    file_path.unlink(missing_ok=True)
-                    raise HTTPException(status_code=400, detail=f"Failed to load file: {exc}")
-                break
+        orchestrator = _get_orchestrator()
+        try:
+            result = orchestrator.run_full_pipeline(
+                file_path,
+                enable_extraction=True,
+                enable_quality_check=True,
+            )
+            ingest_result = result.results.get("ingest", {})
 
-        file_path.unlink(missing_ok=True)
-
-        if not docs:
-            raise HTTPException(status_code=400, detail=f"Unsupported file type: {file.filename}")
-
-        chunks_count = _process_documents(docs)
-        vector_store = VectorStore()
-
-        return IngestResponse(
-            status="ok",
-            documents_loaded=len(docs),
-            chunks_created=chunks_count,
-            total_chunks_in_store=vector_store.count(),
-        )
+            return IngestResponse(
+                status="ok",
+                documents_loaded=ingest_result.get("documents_loaded", 0),
+                chunks_created=ingest_result.get("chunks_created", 0),
+                total_chunks_in_store=VectorStore().count(),
+            )
+        finally:
+            # 清理临时文件
+            file_path.unlink(missing_ok=True)
 
     @app.post("/query", response_model=QueryResponse)
     async def query_endpoint(req: QueryRequest):
         """问答查询."""
-        from knowledge_agent.agents.qa_agent import QAAgent
-        from knowledge_agent.retrieval.bm25_retriever import BM25Retriever
-        from knowledge_agent.retrieval.hybrid_retriever import HybridRetriever
-        from knowledge_agent.retrieval.vector_retriever import VectorRetriever
+        from knowledge_agent.agents.orchestrator import Orchestrator
 
-        vector_store = VectorStore()
-        embedder = Embedder()
-
-        if vector_store.count() == 0:
-            raise HTTPException(status_code=404, detail="No documents ingested yet")
-
-        vector_retriever = VectorRetriever(vector_store=vector_store, embedder=embedder)
-        bm25_retriever = BM25Retriever()
-
-        # Build BM25 index — 使用 get_all_documents 避免全量向量扫描
-        all_results = vector_store.get_all_documents()
-        if all_results:
-            bm25_retriever.index(all_results)
-
-        hybrid = HybridRetriever(vector_retriever=vector_retriever, bm25_retriever=bm25_retriever)
-        agent = QAAgent(hybrid_retriever=hybrid)
-
-        result = agent.query(req.question, top_k=req.top_k)
+        orchestrator = _get_orchestrator()
+        result = orchestrator.run_query(req.question, top_k=req.top_k)
 
         return QueryResponse(
             answer=result["answer"],
@@ -206,10 +179,19 @@ def create_app() -> FastAPI:
         )
 
     @app.get("/documents", response_model=DocumentListResponse)
-    async def list_documents():
-        """列出所有已摄入的文档."""
+    async def list_documents(offset: int = 0, limit: int = 100):
+        """列出已摄入的文档（支持分页）.
+
+        Args:
+            offset: 偏移量，默认 0.
+            limit: 返回条数上限，默认 100，最大 1000.
+        """
+        from knowledge_agent.storage.doc_store import DocStore
+
+        limit = min(limit, 1000)
         doc_store = DocStore()
-        docs = doc_store.list_documents()
+        all_docs = doc_store.list_documents()
+        docs_page = all_docs[offset : offset + limit]
 
         return DocumentListResponse(
             documents=[
@@ -221,14 +203,25 @@ def create_app() -> FastAPI:
                     chunk_count=doc["chunk_count"],
                     ingested_at=doc["ingested_at"],
                 )
-                for doc in docs
+                for doc in docs_page
             ],
             total_chunks=doc_store.get_total_chunks(),
         )
 
+    @app.delete("/documents/{doc_id}", response_model=DeleteResponse)
+    async def delete_document(doc_id: str):
+        """删除指定文档."""
+        orchestrator = _get_orchestrator()
+        success = orchestrator.delete_document(doc_id)
+        if not success:
+            raise HTTPException(status_code=404, detail=f"Document not found: {doc_id}")
+        return DeleteResponse(status="ok", message=f"Deleted document: {doc_id}")
+
     @app.get("/health", response_model=HealthResponse)
     async def health():
         """健康检查."""
+        from knowledge_agent.storage.doc_store import DocStore
+
         doc_store = DocStore()
         vector_store = VectorStore()
         return HealthResponse(
