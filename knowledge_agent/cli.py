@@ -196,6 +196,20 @@ def serve_cmd(host: str, port: int, reload: bool) -> None:
     uvicorn.run(app, host=host, port=port, reload=reload)
 
 
+@cli.command("webui")
+@click.option("--host", default="0.0.0.0", help="监听地址")
+@click.option("--port", default=7860, help="监听端口")
+@click.option("--share", is_flag=True, default=False, help="生成公共链接")
+def webui_cmd(host: str, port: int, share: bool) -> None:
+    """启动 Gradio Web UI."""
+    from knowledge_agent.webui import create_ui
+
+    demo = create_ui()
+    console.print(f"[bold]Starting Web UI at http://{host}:{port}[/bold]")
+    console.print(f"  Share: {'enabled' if share else 'disabled'}")
+    demo.launch(server_name=host, server_port=port, share=share)
+
+
 def main() -> None:
     """入口函数."""
     cli()
