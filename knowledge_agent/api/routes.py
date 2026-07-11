@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -131,6 +132,15 @@ def create_app() -> FastAPI:
         title="Knowledge Agent API",
         description="知识沉淀 Agent — 文档摄入、向量检索、智能问答",
         version="0.1.0",
+    )
+
+    # CORS 配置 — 允许所有来源（开发环境）；生产环境请限制 origin
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
     )
 
     @app.post("/ingest", response_model=IngestResponse)
