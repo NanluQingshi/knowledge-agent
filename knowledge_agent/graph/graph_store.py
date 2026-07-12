@@ -337,6 +337,50 @@ class GraphStore:
         return neighbors
 
     # ------------------------------------------------------------------
+    # 删除
+    # ------------------------------------------------------------------
+
+    def delete_entity(self, entity_id: str) -> bool:
+        """删除一个实体及其所有关联关系.
+
+        Args:
+            entity_id: 实体 ID.
+
+        Returns:
+            是否成功删除.
+        """
+        if entity_id not in self._graph:
+            return False
+        # 删除以该实体为 subject 或 object 的所有边
+        edges_to_remove = [(u, v) for u, v in self._graph.edges() if u == entity_id or v == entity_id]
+        self._graph.remove_edges_from(edges_to_remove)
+        self._graph.remove_node(entity_id)
+        self.save()
+        return True
+
+    def delete_relation(self, subject_id: str, predicate: str, object_id: str) -> bool:
+        """删除指定的关系边.
+
+        Args:
+            subject_id: 主体 ID.
+            predicate: 谓词.
+            object_id: 客体 ID.
+
+        Returns:
+            是否成功删除.
+        """
+        edges_to_remove = [
+            (u, v, k)
+            for u, v, k, d in self._graph.edges(data=True, keys=True)
+            if u == subject_id and v == object_id and d.get("predicate") == predicate
+        ]
+        if not edges_to_remove:
+            return False
+        self._graph.remove_edges_from(edges_to_remove)
+        self.save()
+        return True
+
+    # ------------------------------------------------------------------
     # 属性
     # ------------------------------------------------------------------
 

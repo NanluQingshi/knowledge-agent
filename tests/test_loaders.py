@@ -8,6 +8,10 @@ from knowledge_agent.loaders.base import Document
 from knowledge_agent.loaders.text_loader import TextLoader
 from knowledge_agent.loaders.markdown_loader import MarkdownLoader
 from knowledge_agent.loaders.pdf_loader import PDFLoader
+from knowledge_agent.loaders.html_loader import HTMLLoader
+from knowledge_agent.loaders.csv_loader import CSVLoader
+from knowledge_agent.loaders.json_loader import JSONLoader
+from knowledge_agent.loaders.docx_loader import DocxLoader
 
 
 # ---------------------------------------------------------------------------
@@ -310,3 +314,176 @@ class TestPDFLoader:
         assert len(docs) == 2
         assert "Page 1" in docs[0].content
         assert "Page 2" in docs[1].content
+
+
+# ===================================================================
+# HTMLLoader
+# ===================================================================
+
+class TestHTMLLoader:
+    """Tests for HTMLLoader."""
+
+    def test_can_handle(self):
+        loader = HTMLLoader()
+        assert loader.can_handle(Path("test.html"))
+        assert loader.can_handle(Path("test.htm"))
+        assert not loader.can_handle(Path("test.txt"))
+
+    def test_extract_text_from_html(self, tmp_path):
+        html = "<html><body><h1>Title</h1><p>Hello world.</p></body></html>"
+        file = tmp_path / "test.html"
+        file.write_text(html, encoding="utf-8")
+        loader = HTMLLoader()
+        docs = loader.load(file)
+        assert len(docs) == 1
+        assert "Title" in docs[0].content
+        assert "Hello world" in docs[0].content
+
+    def test_remove_script_tags(self, tmp_path):
+        html = "<html><body><script>alert('x')</script><p>Content</p></body></html>"
+        file = tmp_path / "test.html"
+        file.write_text(html, encoding="utf-8")
+        loader = HTMLLoader()
+        docs = loader.load(file)
+        assert "alert" not in docs[0].content
+        assert "Content" in docs[0].content
+
+    def test_empty_html(self, tmp_path):
+        file = tmp_path / "empty.html"
+        file.write_text("<html></html>", encoding="utf-8")
+        loader = HTMLLoader()
+        docs = loader.load(file)
+        assert len(docs) == 0
+
+    def test_can_handle_htm_extension(self):
+        loader = HTMLLoader()
+        assert loader.can_handle(Path("page.htm"))
+
+    def test_metadata(self, tmp_path):
+        html = "<html><body><p>Test</p></body></html>"
+        file = tmp_path / "meta.html"
+        file.write_text(html, encoding="utf-8")
+        loader = HTMLLoader()
+        docs = loader.load(file)
+        assert docs[0].metadata["filename"] == "meta.html"
+        assert docs[0].metadata["type"] == "html"
+
+
+# ===================================================================
+# CSVLoader
+# ===================================================================
+
+class TestCSVLoader:
+    """Tests for CSVLoader."""
+
+    def test_can_handle(self):
+        loader = CSVLoader()
+        assert loader.can_handle(Path("data.csv"))
+        assert not loader.can_handle(Path("data.txt"))
+
+    def test_format_csv_as_table(self, tmp_path):
+        content = "name,age,city\nAlice,30,Beijing\nBob,25,Shanghai\n"
+        file = tmp_path / "test.csv"
+        file.write_text(content, encoding="utf-8")
+        loader = CSVLoader()
+        docs = loader.load(file)
+        assert len(docs) == 1
+        assert "name" in docs[0].content
+        assert "Alice" in docs[0].content
+        assert "Beijing" in docs[0].content
+
+    def test_empty_csv(self, tmp_path):
+        file = tmp_path / "empty.csv"
+        file.write_text("", encoding="utf-8")
+        loader = CSVLoader()
+        docs = loader.load(file)
+        assert len(docs) == 0
+
+    def test_metadata(self, tmp_path):
+        content = "a,b\n1,2\n"
+        file = tmp_path / "meta.csv"
+        file.write_text(content, encoding="utf-8")
+        loader = CSVLoader()
+        docs = loader.load(file)
+        assert docs[0].metadata["filename"] == "meta.csv"
+        assert docs[0].metadata["type"] == "csv"
+
+
+# ===================================================================
+# JSONLoader
+# ===================================================================
+
+class TestJSONLoader:
+    """Tests for JSONLoader."""
+
+    def test_can_handle(self):
+        loader = JSONLoader()
+        assert loader.can_handle(Path("data.json"))
+        assert not loader.can_handle(Path("data.txt"))
+
+    def test_format_dict(self, tmp_path):
+        data = '{"name": "Alice", "age": 30, "city": "Beijing"}'
+        file = tmp_path / "test.json"
+        file.write_text(data, encoding="utf-8")
+        loader = JSONLoader()
+        docs = loader.load(file)
+        assert len(docs) == 1
+        assert "Alice" in docs[0].content
+        assert "name" in docs[0].content
+
+    def test_extract_content_field(self, tmp_path):
+        data = '{"content": "This is the main content.", "meta": "ignored"}'
+        file = tmp_path / "content.json"
+        file.write_text(data, encoding="utf-8")
+        loader = JSONLoader()
+        docs = loader.load(file)
+        assert len(docs) == 1
+        assert "This is the main content" in docs[0].content
+
+    def test_format_list(self, tmp_path):
+        data = '["item1", "item2", "item3"]'
+        file = tmp_path / "list.json"
+        file.write_text(data, encoding="utf-8")
+        loader = JSONLoader()
+        docs = loader.load(file)
+        assert len(docs) == 1
+
+    def test_invalid_json(self, tmp_path):
+        file = tmp_path / "invalid.json"
+        file.write_text("{invalid json}", encoding="utf-8")
+        loader = JSONLoader()
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            loader.load(file)
+
+    def test_empty_json_array(self, tmp_path):
+        file = tmp_path / "empty.json"
+        file.write_text("[]", encoding="utf-8")
+        loader = JSONLoader()
+        docs = loader.load(file)
+        assert len(docs) == 1  # empty array is still valid JSON
+
+
+# ===================================================================
+# DocxLoader
+# ===================================================================
+
+class TestDocxLoader:
+    """Tests for DocxLoader (requires python-docx)."""
+
+    def test_can_handle(self):
+        loader = DocxLoader()
+        assert loader.can_handle(Path("test.docx"))
+        assert not loader.can_handle(Path("test.txt"))
+
+    def test_import_error_when_missing_dep(self):
+        """If python-docx is not installed, load should raise ImportError."""
+        loader = DocxLoader()
+        file = Path("/nonexistent/test.docx")
+        try:
+            loader.load(file)
+        except ImportError:
+            pass  # expected when python-docx is not installed
+        except FileNotFoundError:
+            pytest.skip("python-docx is installed, skipping ImportError test")
+        except Exception:
+            pytest.fail("Unexpected exception")

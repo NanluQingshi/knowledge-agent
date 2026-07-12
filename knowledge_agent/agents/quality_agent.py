@@ -192,6 +192,149 @@ class QualityAgent:
         return gaps
 
     # ------------------------------------------------------------------
+    # 冲突自动消解
+    # ------------------------------------------------------------------
+
+    def resolve_conflicts(
+        self,
+        conflicts: list[dict[str, Any]],
+        resolution_strategy: str = "keep_newer",
+    ) -> list[dict[str, Any]]:
+        """自动消解知识冲突.
+
+        Args:
+            conflicts: detect_conflicts() 返回的冲突列表.
+            resolution_strategy: 消解策略:
+                - "keep_newer": 保留较新的知识（默认）
+                - "keep_existing": 保留已有知识
+                - "merge": 两方都保留但标记为争议
+
+        Returns:
+            已处理的冲突列表，每项增加 resolved 和 action 字段.
+        """
+        if not conflicts:
+            return []
+
+        resolved: list[dict[str, Any]] = []
+        for conflict in conflicts:
+            entry = dict(conflict)
+            entry["resolved"] = True
+            entry["resolution_strategy"] = resolution_strategy
+
+            if resolution_strategy == "keep_newer":
+                # 新知识替代旧知识 — 实际删除操作需要由调用方执行
+                entry["action"] = "replace_existing"
+            elif resolution_strategy == "keep_existing":
+                entry["action"] = "discard_new"
+            else:  # merge
+                entry["action"] = "flag_for_review"
+
+            # 标记严重冲突需要人工审核
+            if conflict.get("severity") == "high":
+                entry["action"] = "flag_for_review"
+                entry["needs_human_review"] = True
+
+            resolved.append(entry)
+
+        return resolved
+
+    # ------------------------------------------------------------------
+    # 知识缺口自动填充
+    # ------------------------------------------------------------------
+
+    def fill_knowledge_gaps(
+        self,
+        gaps: list[dict[str, Any]],
+        max_fill: int = 3,
+    ) -> list[dict[str, Any]]:
+        """尝试自动填充知识缺口.
+
+        对每个缺口实体，如果当前连接数为 0（完全孤立），
+        尝试从知识图谱中已有实体中寻找关联（基于名称相似度）。
+
+        Args:
+            gaps: detect_knowledge_gaps() 返回的缺口列表.
+            max_fill: 最多填充的缺口数量.
+
+        Returns:
+            已填充的缺口列表，每项增加 filled 和 new_connections 字段.
+        """
+        if not gaps:
+            return []
+
+        filled: list[dict[str, Any]] = []
+        for gap in gaps[:max_fill]:
+            entry = dict(gap)
+            entity_id = gap.get("entity_id", "")
+            entity_name = gap.get("entity_name", "")
+
+            if not entity_id or gap.get("current_connections", 0) > 0:
+                # 已经有连接的不处理
+                entry["filled"] = False
+                entry["reason"] = "already_has_connections" if gap.get("current_connections", 0) > 0 else "no_entity_id"
+                filled.append(entry)
+                continue
+
+            # 尝试在已有实体中寻找名称相似的可能关联
+            new_connections = self._find_potential_connections(entity_name)
+            if new_connections:
+                entry["filled"] = True
+                entry["new_connections"] = new_connections
+                entry["reason"] = "auto_filled"
+            else:
+                entry["filled"] = False
+                entry["reason"] = "no_potential_connections_found"
+
+            filled.append(entry)
+
+        return filled
+
+    def _find_potential_connections(self, entity_name: str) -> list[dict[str, Any]]:
+        """根据实体名称在知识图谱中寻找潜在关联.
+
+        使用简单的名称部分匹配（非精确匹配）来发现可能相关的实体。
+
+        Args:
+            entity_name: 实体名称.
+
+        Returns:
+            潜在关联列表.
+        """
+        all_entities = self._graph_store.get_all_entities()
+        if not all_entities:
+            return []
+
+        # 将实体名拆分为关键词
+        keywords = set(entity_name.lower().replace("_", " ").split())
+        if not keywords:
+            return []
+
+        connections: list[dict[str, Any]] = []
+        for entity in all_entities:
+            eid = entity.get("id", "")
+            ename = entity.get("name", "")
+
+            # 跳过自身
+            if ename.lower() == entity_name.lower() or eid == entity_name.lower().replace(" ", "_"):
+                continue
+
+            # 检查是否有共享关键词
+            ename_keywords = set(ename.lower().replace("_", " ").split())
+            shared = keywords & ename_keywords
+            if shared:
+                connections.append({
+                    "entity_id": eid,
+                    "entity_name": ename,
+                    "shared_keywords": list(shared),
+                    "suggested_relation": "related_to",
+                    "confidence": round(len(shared) / max(len(keywords), 1), 2),
+                })
+
+        # 按置信度降序排列，取前 5 个
+        connections.sort(key=lambda c: c["confidence"], reverse=True)
+        return connections[:5]
+
+    # ------------------------------------------------------------------
     # 新鲜度评分
     # ------------------------------------------------------------------
 
