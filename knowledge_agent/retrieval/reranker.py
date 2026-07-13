@@ -93,7 +93,6 @@ class CrossEncoderReranker:
                 from sentence_transformers import CrossEncoder
 
                 self._model = CrossEncoder(self._model_name)
-                settings  # touch settings to ensure it's importable
 
             pairs = [[query, text] for text in texts]
             scores = self._model.predict(pairs)

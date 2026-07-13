@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from knowledge_agent.loaders.base import BaseLoader, Document
+
+logger = logging.getLogger(__name__)
 
 
 class CSVLoader(BaseLoader):
@@ -67,5 +70,6 @@ class CSVLoader(BaseLoader):
                 lines.append(" | ".join(row[: len(header)]))
 
             return "\n".join(lines)
-        except Exception:
+        except (csv.Error, OSError) as exc:
+            logger.warning("Failed to parse CSV %s: %s, falling back to raw text", path, exc)
             return path.read_text(encoding="utf-8", errors="replace")
