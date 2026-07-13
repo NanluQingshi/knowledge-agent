@@ -19,6 +19,15 @@ def _get_orchestrator() -> Orchestrator:
     return _ORCHESTRATOR
 
 
+def _recall_relevant_memories(query: str, top_k: int = 3) -> list[dict[str, Any]]:
+    """检索与当前查询语义相关的情景记忆（跨会话历史）."""
+    try:
+        orchestrator = _get_orchestrator()
+        return orchestrator._episodic_memory.recall(query, top_k=top_k, memory_type="conversation")
+    except Exception:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # 底层逻辑
 # ---------------------------------------------------------------------------
@@ -66,16 +75,36 @@ def _ingest_files(files: list[str] | None) -> str:
 
 
 def _answer_question(message: str, history: list[dict[str, str]]) -> str:
-    """RAG 问答（流式），支持多轮对话历史."""
+    """RAG 问答（流式），支持多轮对话历史和跨会话记忆检索."""
     if not message or not message.strip():
         return "请输入问题。"
 
     orchestrator = _get_orchestrator()
 
+    # 检索相关历史记忆，注入到对话上下文中
+    relevant_memories = _recall_relevant_memories(message, top_k=3)
+    enriched_history = list(history)
+    if relevant_memories:
+        memory_context = "\n".join(
+            f"[Past Q&A: {m.get('text', '')[:200]}]"
+            for m in relevant_memories
+        )
+        # 添加一条系统级的记忆提示
+        enriched_history.insert(
+            0,
+            {
+                "role": "system",
+                "content": (
+                    "以下是从历史对话中检索到的相关记忆，可能对回答有帮助：\n"
+                    f"{memory_context}"
+                ),
+            },
+        )
+
     full_answer = ""
     for chunk in orchestrator.run_query_stream(
         message,
-        chat_history=history,  # 传入历史对话，实现多轮上下文
+        chat_history=enriched_history,
     ):
         full_answer += chunk
         yield full_answer
