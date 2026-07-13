@@ -160,6 +160,7 @@ def _system_health() -> str:
     orchestrator = _get_orchestrator()
     report = orchestrator.get_system_report()
     health = orchestrator.get_knowledge_health()
+    memory_stats = orchestrator.get_memory_stats()
 
     storage = report.get("storage", {})
     graph = report.get("graph", {})
@@ -172,6 +173,10 @@ def _system_health() -> str:
         f"**向量库**: {storage.get('vector_store_size', 0)} 条",
         f"**文档库**: {storage.get('total_documents', 0)} 篇",
         f"**知识图谱**: {graph.get('nodes', 0)} 节点 / {graph.get('edges', 0)} 边",
+        "",
+        "## 🧠 记忆系统\n",
+        f"**情景记忆**: {memory_stats.get('episodic_count', 0)} 条",
+        f"**语义记忆**: {memory_stats.get('semantic_facts', 0)} 条事实",
         "",
         "## 📊 健康状态\n",
         f"**过期文档**: {quality.get('expired_documents', 0)}",
@@ -194,6 +199,16 @@ def _run_evaluation(mode: str) -> str:
     else:
         result = runner.evaluate_answer_quality(top_k=5)
     return result.get("summary", result.get("message", "评估完成。"))
+
+
+def _clear_memories() -> str:
+    """清空情景记忆."""
+    try:
+        orchestrator = _get_orchestrator()
+        orchestrator._episodic_memory.clear()
+        return "✅ 已清空所有情景记忆（对话历史）。"
+    except Exception as exc:
+        return f"❌ 清空失败: {exc}"
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +254,13 @@ def create_ui() -> gr.Blocks:
                 title="",
                 description="输入问题开始对话",
                 type="messages",
+            )
+            with gr.Row():
+                clear_btn = gr.Button("🗑️ 清空对话历史", variant="stop", size="sm")
+                clear_output = gr.Markdown()
+            clear_btn.click(
+                fn=_clear_memories,
+                outputs=clear_output,
             )
 
         with gr.Tab("📚 文档列表"):
