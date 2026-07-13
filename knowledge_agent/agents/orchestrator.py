@@ -383,6 +383,30 @@ class Orchestrator:
         }
 
     # ------------------------------------------------------------------
+    # 检索
+    # ------------------------------------------------------------------
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """执行混合检索（向量 + BM25），返回检索结果.
+
+        公开的检索接口，供 EvaluationRunner 等外部模块使用，
+        无需访问内部私有属性。
+
+        Args:
+            query: 查询文本.
+            top_k: 返回结果数量；默认使用 settings.retrieval_top_k.
+
+        Returns:
+            检索结果列表，每项含 id、text、metadata、score.
+        """
+        qa = self._get_qa_agent()
+        return qa._retriever.retrieve(query, top_k=top_k)
+
+    # ------------------------------------------------------------------
     # 文档管理
     # ------------------------------------------------------------------
 
