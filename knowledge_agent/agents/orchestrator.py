@@ -309,6 +309,55 @@ class Orchestrator:
         }
 
     # ------------------------------------------------------------------
+    # 记忆系统
+    # ------------------------------------------------------------------
+
+    def recall_memories(
+        self,
+        query: str,
+        top_k: int = 5,
+        memory_type: str | None = "conversation",
+    ) -> list[dict[str, Any]]:
+        """检索相关情景记忆.
+
+        Args:
+            query: 查询文本.
+            top_k: 返回数量.
+            memory_type: 记忆类型过滤 (conversation / action / observation).
+
+        Returns:
+            情景记忆列表.
+        """
+        try:
+            return self._episodic_memory.recall(
+                query=query,
+                top_k=top_k,
+                memory_type=memory_type,
+            )
+        except Exception:
+            return []
+
+    def get_memory_stats(self) -> dict[str, int]:
+        """获取记忆系统统计.
+
+        Returns:
+            包含 episodic_count、semantic_facts 的字典.
+        """
+        try:
+            episodic_count = self._episodic_memory.count()
+        except Exception:
+            episodic_count = 0
+        try:
+            semantic_facts = self._semantic_memory.fact_count
+        except Exception:
+            semantic_facts = 0
+
+        return {
+            "episodic_count": episodic_count,
+            "semantic_facts": semantic_facts,
+        }
+
+    # ------------------------------------------------------------------
     # 反馈与进化
     # ------------------------------------------------------------------
 
