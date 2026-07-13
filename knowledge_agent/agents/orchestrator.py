@@ -208,6 +208,7 @@ class Orchestrator:
         question: str,
         top_k: int = 5,
         use_graphrag: bool = False,
+        chat_history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """执行 RAG 问答.
 
@@ -215,12 +216,13 @@ class Orchestrator:
             question: 用户问题.
             top_k: 检索结果数量.
             use_graphrag: 是否同时使用 GraphRAG 检索增强.
+            chat_history: 可选的历史对话记录，每项为 {"role": ..., "content": ...}.
 
         Returns:
             QAAgent.query() 返回的结果字典.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
-        result = qa.query(question, top_k=top_k)
+        result = qa.query(question, top_k=top_k, chat_history=chat_history)
 
         # 将问答记录存入情景记忆
         try:
@@ -242,6 +244,7 @@ class Orchestrator:
         question: str,
         top_k: int = 5,
         use_graphrag: bool = False,
+        chat_history: list[dict[str, str]] | None = None,
     ):
         """执行流式 RAG 问答.
 
@@ -249,12 +252,33 @@ class Orchestrator:
             question: 用户问题.
             top_k: 检索结果数量.
             use_graphrag: 是否同时使用 GraphRAG 检索增强.
+            chat_history: 可选的历史对话记录，每项为 {"role": ..., "content": ...}.
 
         Yields:
             LLM 文本片段.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
-        yield from qa.stream_query(question, top_k=top_k)
+
+        # 收集流式输出并存入记忆
+        full_answer = ""
+        for chunk in qa.stream_query(question, top_k=top_k, chat_history=chat_history):
+            full_answer += chunk
+            yield chunk
+
+        # 流结束后存入情景记忆
+        if full_answer:
+            try:
+                self._episodic_memory.store_conversation(
+                    user_message=question,
+                    assistant_response=full_answer,
+                    metadata={
+                        "top_k": top_k,
+                        "use_graphrag": use_graphrag,
+                        "streamed": True,
+                    },
+                )
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # 统计分析
