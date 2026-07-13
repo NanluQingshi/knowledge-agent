@@ -66,14 +66,17 @@ def _ingest_files(files: list[str] | None) -> str:
 
 
 def _answer_question(message: str, history: list[dict[str, str]]) -> str:
-    """RAG 问答（流式）."""
+    """RAG 问答（流式），支持多轮对话历史."""
     if not message or not message.strip():
         return "请输入问题。"
 
     orchestrator = _get_orchestrator()
 
     full_answer = ""
-    for chunk in orchestrator.run_query_stream(message):
+    for chunk in orchestrator.run_query_stream(
+        message,
+        chat_history=history,  # 传入历史对话，实现多轮上下文
+    ):
         full_answer += chunk
         yield full_answer
 
