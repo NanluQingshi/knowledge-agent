@@ -215,6 +215,61 @@ def _run_evaluation(mode: str) -> str:
     return result.get("summary", result.get("message", "评估完成。"))
 
 
+
+def _render_graph() -> str:
+    """生成知识图谱的 HTML 可视化."""
+    try:
+        from pyvis.network import Network
+    except ImportError:
+        return "pyvis 未安装，请执行: pip install pyvis"
+
+    import tempfile
+
+    orchestrator = _get_orchestrator()
+    graph = orchestrator._extraction._graph_store.graph
+
+    if graph.number_of_nodes() == 0:
+        return "知识图谱为空，请先摄入文档并执行知识抽取。"
+
+    net = Network(height="600px", width="100%", directed=True, bgcolor="#1a1a2e", font_color="white")
+
+    type_colors = {
+        "person": "#ff6b6b",
+        "organization": "#4ecdc4",
+        "technology": "#45b7d1",
+        "concept": "#f9ca24",
+        "location": "#a29bfe",
+        "date": "#fd79a8",
+        "other": "#dfe6e9",
+        "unknown": "#636e72",
+    }
+
+    for node, data in graph.nodes(data=True):
+        label = data.get("name", node)
+        etype = data.get("type", "unknown")
+        color = type_colors.get(etype, "#636e72")
+        net.add_node(node, label=label, title=label, color=color, size=15)
+
+    for u, v, data in graph.edges(data=True):
+        label = data.get("predicate", "related_to")
+        net.add_edge(u, v, title=label, label=label, arrows="to", font={"size": 10, "color": "#aaa"})
+
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False, encoding="utf-8")
+    net.save_graph(tmp.name)
+    return tmp.name
+
+
+def _clear_memories() -> str:
+    """清空情景记忆."""
+    try:
+        orchestrator = _get_orchestrator()
+        orchestrator._episodic_memory.clear()
+        return "✅ 已清空所有情景记忆（对话历史）。"
+    except Exception as exc:
+        return f"❌ 清空失败: {exc}"
+
+
+
 # ---------------------------------------------------------------------------
 # Gradio 界面
 # ---------------------------------------------------------------------------
@@ -299,6 +354,16 @@ def create_ui() -> gr.Blocks:
                 fn=_delete_document,
                 inputs=delete_input,
                 outputs=delete_output,
+            )
+
+        with gr.Tab("🕸️ 知识图谱"):
+            gr.Markdown("### 知识图谱可视化\n展示已提取的实体和关系网络。")
+            with gr.Row():
+                graph_btn = gr.Button("🔄 生成图谱", variant="primary", scale=1)
+                graph_html = gr.HTML(label="知识图谱")
+            graph_btn.click(
+                fn=_render_graph,
+                outputs=graph_html,
             )
 
         with gr.Tab("📊 系统状态"):
