@@ -25,12 +25,15 @@ class DocStore:
         file_type TEXT,
         chunk_count INTEGER DEFAULT 0,
         content_hash TEXT DEFAULT '',
+        version INTEGER DEFAULT 1,
+        previous_version_id TEXT DEFAULT '',
         ingested_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         metadata_json TEXT
     )
     """
 
-    _COLUMNS = ["id", "source", "filename", "file_type", "chunk_count", "content_hash", "ingested_at", "metadata_json"]
+    _COLUMNS = ["id", "source", "filename", "file_type", "chunk_count", "content_hash",
+                 "version", "previous_version_id", "ingested_at", "metadata_json"]
 
     def __init__(self, db_path: str | None = None) -> None:
         """初始化 DocStore.
@@ -65,6 +68,7 @@ class DocStore:
         chunk_count: int,
         content_hash: str = "",
         metadata: dict[str, Any] | None = None,
+        previous_version_id: str = "",
     ) -> None:
         """添加一条文档元数据记录.
 
@@ -74,18 +78,28 @@ class DocStore:
             filename: 文档文件名.
             file_type: 文档类型（如 pdf、md、txt）.
             chunk_count: 文档被切分出的 Chunk 数量.
-            content_hash: 文档内容的 SHA256 哈希（用于去重）.
+            content_hash: 文档内容的 SHA256 哈希（用于去重和版本追踪）.
             metadata: 附加元数据，会被序列化为 JSON 字符串.
+            previous_version_id: 前一版本的文档 ID，用于版本链追踪.
 
         Raises:
             sqlite3.IntegrityError: 主键冲突时抛出.
         """
+        # 计算版本号
+        version = 1
+        if previous_version_id:
+            prev = self.get_document(previous_version_id)
+            if prev:
+                version = (prev.get("version", 0) or 0) + 1
+
         metadata_json = json.dumps(metadata or {}, ensure_ascii=False)
         with self._connection() as conn:
             conn.execute(
-                """INSERT INTO documents (id, source, filename, file_type, chunk_count, content_hash, metadata_json)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                (doc_id, source, filename, file_type, chunk_count, content_hash, metadata_json),
+                """INSERT INTO documents (id, source, filename, file_type, chunk_count,
+                   content_hash, version, previous_version_id, metadata_json)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (doc_id, source, filename, file_type, chunk_count, content_hash,
+                 version, previous_version_id, metadata_json),
             )
             conn.commit()
 
@@ -147,6 +161,88 @@ class DocStore:
                 (content_hash,),
             ).fetchall()
         return [self._row_to_dict(row) for row in rows]
+
+    def find_by_source(self, source: str) -> list[dict[str, Any]]:
+        """根据来源路径查找文档（按版本倒序）.
+
+        Args:
+            source: 文档来源路径.
+
+        Returns:
+            匹配的文档版本列表，最新版本在前.
+        """
+        if not source:
+            return []
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM documents WHERE source = ? ORDER BY version DESC, ingested_at DESC",
+                (source,),
+            ).fetchall()
+        return [self._row_to_dict(row) for row in rows]
+
+    def get_document_versions(self, doc_id: str) -> list[dict[str, Any]]:
+        """获取指定文档的所有版本历史.
+
+        通过 previous_version_id 链追踪所有版本。
+
+        Args:
+            doc_id: 当前文档 ID.
+
+        Returns:
+            版本历史列表，从最新到最旧.
+        """
+        versions = []
+        current = self.get_document(doc_id)
+        if current is None:
+            return []
+
+        # 向前追溯所有版本
+        while current is not None:
+            versions.append(current)
+            prev_id = current.get("previous_version_id", "")
+            if prev_id:
+                current = self.get_document(prev_id)
+            else:
+                current = None
+
+        return versions
+
+    def get_latest_version(self, source: str) -> dict[str, Any] | None:
+        """获取指定来源的最新版本文档.
+
+        Args:
+            source: 文档来源路径.
+
+        Returns:
+            最新版本文档，或 None（无记录时）.
+        """
+        docs = self.find_by_source(source)
+        return docs[0] if docs else None
+
+    def rollback_document(self, doc_id: str) -> dict[str, Any] | None:
+        """回滚到指定版本（标记为当前激活版本，保留版本链）.
+
+        Args:
+            doc_id: 要回滚到的文档版本 ID.
+
+        Returns:
+            回滚后的文档元数据，或 None（未找到时）.
+        """
+        target = self.get_document(doc_id)
+        if target is None:
+            return None
+        # 更新元数据标记为回滚状态
+        meta = target.get("metadata", {})
+        meta["rolled_back"] = True
+        meta["rolled_back_at"] = __import__("datetime").datetime.now().isoformat()
+        metadata_json = json.dumps(meta, ensure_ascii=False)
+        with self._connection() as conn:
+            conn.execute(
+                "UPDATE documents SET metadata_json = ? WHERE id = ?",
+                (metadata_json, doc_id),
+            )
+            conn.commit()
+        return self.get_document(doc_id)
 
     def get_total_chunks(self) -> int:
         """返回所有文档的 Chunk 总数.

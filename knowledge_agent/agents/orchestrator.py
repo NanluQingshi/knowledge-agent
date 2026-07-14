@@ -463,6 +463,35 @@ class Orchestrator:
         return True
 
     # ------------------------------------------------------------------
+    # 文档版本管理
+    # ------------------------------------------------------------------
+
+    def get_document_versions(self, doc_id: str) -> list[dict[str, Any]]:
+        """获取文档的版本历史.
+
+        Args:
+            doc_id: 文档 ID.
+
+        Returns:
+            版本历史列表，从最新到最旧.
+        """
+        try:
+            return self._collection._doc_store.get_document_versions(doc_id)
+        except Exception:
+            return []
+
+    def rollback_document(self, doc_id: str) -> dict[str, Any] | None:
+        """回滚文档到指定版本.
+
+        Args:
+            doc_id: 要回滚到的文档版本 ID.
+
+        Returns:
+            回滚后的文档元数据.
+        """
+        return self._collection._doc_store.rollback_document(doc_id)
+
+    # ------------------------------------------------------------------
     # Internal
     # ------------------------------------------------------------------
 
