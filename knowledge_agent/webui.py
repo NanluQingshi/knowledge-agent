@@ -149,17 +149,41 @@ def _list_documents() -> str:
     if docs:
         lines.append("")
         lines.append("### 文档列表")
-        lines.append("| ID | 文件名 | 类型 | Chunks | 时间 |")
-        lines.append("|----|--------|------|--------|------|")
+        lines.append("| ID | 文件名 | 类型 | 版本 | Chunks | 时间 |")
+        lines.append("|----|--------|------|------|--------|------|")
         for doc in docs[:50]:
             doc_id = doc["id"][:8] + "..."
+            version = doc.get("version", 1)
             lines.append(
                 f"| {doc_id} | {doc['filename']} | {doc['file_type']} | "
-                f"{doc['chunk_count']} | {doc['ingested_at'][:10]} |"
+                f"v{version} | {doc['chunk_count']} | {doc['ingested_at'][:10]} |"
             )
         if len(docs) > 50:
             lines.append(f"\n*... 还有 {len(docs) - 50} 篇文档*")
 
+    return "\n".join(lines)
+
+
+def _get_document_versions(doc_id: str) -> str:
+    """获取文档版本历史."""
+    if not doc_id or not doc_id.strip():
+        return "请输入文档 ID。"
+    orchestrator = _get_orchestrator()
+    versions = orchestrator.get_document_versions(doc_id.strip())
+    if not versions:
+        return f"未找到文档: {doc_id}"
+
+    lines = [f"### 文档版本历史: {versions[0].get('filename', 'unknown')}"]
+    for v in versions:
+        v_id = v["id"][:8] + "..."
+        v_num = v.get("version", "?")
+        rolled_back = v.get("metadata", {}).get("rolled_back", False)
+        tag = " ⬅️ 当前" if v == versions[0] else ""
+        tag += " 🔙 已回滚" if rolled_back else ""
+        lines.append(
+            f"- v{v_num} | ID: {v_id} | {v['ingested_at'][:10]} | "
+            f"{v['chunk_count']} chunks{tag}"
+        )
     return "\n".join(lines)
 
 
@@ -214,6 +238,23 @@ def _run_evaluation(mode: str) -> str:
         result = runner.evaluate_answer_quality(top_k=5)
     return result.get("summary", result.get("message", "评估完成。"))
 
+
+
+def _update_api_key(provider: str, key: str, base_url: str) -> str:
+    """更新 API Key 配置（运行时生效，不持久化到 .env）. """
+    if not key or not key.strip():
+        return f"❌ {provider} API Key 不能为空。"
+    try:
+        import os
+        if provider == "OpenAI":
+            os.environ["KA_OPENAI_API_KEY"] = key.strip()
+            if base_url:
+                os.environ["KA_OPENAI_BASE_URL"] = base_url.strip()
+        elif provider == "Anthropic":
+            os.environ["KA_ANTHROPIC_API_KEY"] = key.strip()
+        return f"✅ {provider} API Key 已更新（当前会话有效）。"
+    except Exception as exc:
+        return f"❌ 更新失败: {exc}"
 
 
 def _render_graph() -> str:
@@ -330,6 +371,31 @@ def create_ui() -> gr.Blocks:
                 type="messages",
             )
 
+        with gr.Tab("⚙️ 设置"):
+            gr.Markdown("### API Key 配置\n配置 LLM 和 Embedding 的 API Key（当前会话有效，重启后失效）。")
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("#### OpenAI")
+                    openai_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
+                    openai_url = gr.Textbox(label="Base URL", placeholder="https://api.openai.com/v1")
+                    openai_btn = gr.Button("保存 OpenAI 配置", variant="primary")
+                    openai_out = gr.Markdown()
+                    openai_btn.click(
+                        fn=_update_api_key,
+                        inputs=[gr.State("OpenAI"), openai_key, openai_url],
+                        outputs=openai_out,
+                    )
+                with gr.Column():
+                    gr.Markdown("#### Anthropic")
+                    anth_key = gr.Textbox(label="API Key", type="password", placeholder="sk-ant-...")
+                    anth_btn = gr.Button("保存 Anthropic 配置", variant="primary")
+                    anth_out = gr.Markdown()
+                    anth_btn.click(
+                        fn=_update_api_key,
+                        inputs=[gr.State("Anthropic"), anth_key, gr.State("")],
+                        outputs=anth_out,
+                    )
+
         with gr.Tab("📚 文档列表"):
             refresh_btn = gr.Button("🔄 刷新", variant="secondary")
             doc_output = gr.Markdown(label="文档信息")
@@ -340,6 +406,21 @@ def create_ui() -> gr.Blocks:
             )
             # 页面加载时自动显示
             demo.load(_list_documents, outputs=doc_output)
+
+            gr.Markdown("---\n### 📋 版本历史")
+            with gr.Row():
+                ver_input = gr.Textbox(
+                    label="文档 ID",
+                    placeholder="输入文档 ID 查看版本历史...",
+                    scale=3,
+                )
+                ver_btn = gr.Button("查看版本", variant="secondary", scale=1)
+            ver_output = gr.Markdown()
+            ver_btn.click(
+                fn=_get_document_versions,
+                inputs=ver_input,
+                outputs=ver_output,
+            )
 
             gr.Markdown("---\n### 🗑️ 删除文档")
             with gr.Row():
