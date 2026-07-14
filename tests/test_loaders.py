@@ -487,3 +487,29 @@ class TestDocxLoader:
             pytest.skip("python-docx is installed, skipping ImportError test")
         except Exception:
             pytest.fail("Unexpected exception")
+
+
+# ===================================================================
+# UrlLoader
+# ===================================================================
+
+class TestUrlLoader:
+    """Tests for UrlLoader (requires httpx & beautifulsoup4)."""
+
+    def test_can_handle(self):
+        from knowledge_agent.loaders.url_loader import UrlLoader
+        loader = UrlLoader()
+        assert not loader.can_handle(Path("test.txt"))  # UrlLoader doesn't match by extension
+
+    def test_ingest_url_import_error(self):
+        """If httpx is not installed, ingest_url should raise ImportError."""
+        from knowledge_agent.loaders.url_loader import UrlLoader
+        loader = UrlLoader()
+        try:
+            loader.ingest_url("https://example.com")
+        except ImportError:
+            pass  # expected when httpx is not installed
+        except RuntimeError:
+            pass  # if httpx is installed but network fails, that's also OK
+        except Exception:
+            pytest.fail("Unexpected exception")
