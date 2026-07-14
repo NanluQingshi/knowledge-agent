@@ -8,6 +8,7 @@ from knowledge_agent.loaders.docx_loader import DocxLoader
 from knowledge_agent.loaders.html_loader import HTMLLoader
 from knowledge_agent.loaders.csv_loader import CSVLoader
 from knowledge_agent.loaders.json_loader import JSONLoader
+from knowledge_agent.loaders.url_loader import UrlLoader
 
 
 def all_loaders() -> list[BaseLoader]:
@@ -36,5 +37,6 @@ __all__ = [
     "HTMLLoader",
     "CSVLoader",
     "JSONLoader",
+    "UrlLoader",
     "all_loaders",
 ]

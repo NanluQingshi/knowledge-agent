@@ -33,15 +33,16 @@ gradio = "^5.0.0"
 # Optional: document loaders
 python-docx = {version = ">=1.1.0", optional = true}
 beautifulsoup4 = {version = ">=4.12.0", optional = true}
+httpx = {version = ">=0.28.0", optional = true}
 
 # Evaluation (optional)
 ragas = {version = "^0.2.0", optional = true}
 datasets = {version = "^3.0.0", optional = true}
 
 [tool.poetry.extras]
-loaders = ["python-docx", "beautifulsoup4"]
+loaders = ["python-docx", "beautifulsoup4", "httpx"]
 eval = ["ragas", "datasets"]
-all = ["python-docx", "beautifulsoup4", "ragas", "datasets"]
+all = ["python-docx", "beautifulsoup4", "httpx", "ragas", "datasets"]
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"

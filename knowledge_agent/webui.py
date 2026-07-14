@@ -65,6 +65,57 @@ def _ingest_files(files: list[str] | None) -> str:
     return "\n\n".join(results) if results else "未处理任何文件。"
 
 
+def _ingest_url(url: str) -> str:
+    """从 URL 抓取网页并摄入."""
+    if not url or not url.strip():
+        return "请输入 URL。"
+
+    url = url.strip()
+    from knowledge_agent.loaders.url_loader import UrlLoader
+
+    orchestrator = _get_orchestrator()
+    try:
+        loader = UrlLoader()
+        docs = loader.ingest_url(url)
+        if not docs:
+            return f"❌ 无法从 {url} 提取内容。"
+
+        # 逐文档摄入
+        total_chunks = 0
+        for doc in docs:
+            chunks = orchestrator._collection._chunker.chunk(doc.content, doc.metadata)
+            if not chunks:
+                continue
+
+            import uuid
+            chunk_ids = [uuid.uuid4().hex for _ in chunks]
+            chunk_texts = [c.text for c in chunks]
+            embeddings = orchestrator._collection._embedder.embed(chunk_texts)
+
+            metadatas = []
+            for c in chunks:
+                meta = dict(c.metadata)
+                meta["source"] = doc.source
+                metadatas.append(meta)
+
+            orchestrator._collection._vector_store.add(chunks, embeddings, metadatas, chunk_ids)
+            total_chunks += len(chunks)
+
+        # 注册到 DocStore
+        orchestrator._collection._doc_store.add_document(
+            doc_id=uuid.uuid4().hex,
+            source=url,
+            filename=url.rstrip("/").split("/")[-1] or "webpage",
+            file_type="url",
+            chunk_count=total_chunks,
+            metadata={"source_url": url},
+        )
+
+        return f"✅ **{url}**\n  - 文档: {len(docs)}\n  - 分块: {total_chunks}"
+    except (ImportError, RuntimeError) as exc:
+        return f"❌ {exc}"
+
+
 def _answer_question(message: str, history: list[dict[str, str]]) -> str:
     """RAG 问答（流式）."""
     if not message or not message.strip():
@@ -198,6 +249,21 @@ def create_ui() -> gr.Blocks:
                 fn=_ingest_files,
                 inputs=file_input,
                 outputs=ingest_output,
+            )
+
+            gr.Markdown("---\n### 🌐 从 URL 抓取")
+            with gr.Row():
+                url_input = gr.Textbox(
+                    label="网页 URL",
+                    placeholder="https://example.com/article",
+                    scale=3,
+                )
+                url_btn = gr.Button("🌐 抓取并摄入", variant="primary", scale=1)
+            url_output = gr.Markdown()
+            url_btn.click(
+                fn=_ingest_url,
+                inputs=url_input,
+                outputs=url_output,
             )
 
         with gr.Tab("💬 智能问答"):
