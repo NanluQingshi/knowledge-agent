@@ -85,6 +85,12 @@ class Orchestrator:
         self._bm25_retriever: BM25Retriever | None = None
         self._last_vector_count: int = 0
 
+        # 监控
+        from knowledge_agent.monitoring.metrics import MetricsCollector
+        from knowledge_agent.monitoring.tracer import Tracer
+        self._metrics = MetricsCollector()
+        self._tracer = Tracer()
+
     # ------------------------------------------------------------------
     # 全流程管道
     # ------------------------------------------------------------------
@@ -222,7 +228,11 @@ class Orchestrator:
             QAAgent.query() 返回的结果字典.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
-        result = qa.query(question, top_k=top_k, chat_history=chat_history)
+
+        self._tracer.start()
+        self._metrics.increment("query.count")
+        with self._metrics.timeit("query"):
+            result = qa.query(question, top_k=top_k, chat_history=chat_history)
 
         # 将问答记录存入情景记忆
         try:
@@ -259,8 +269,15 @@ class Orchestrator:
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
 
+        self._tracer.start()
+        self._metrics.increment("query.count")
+
         # 收集流式输出并存入记忆
         full_answer = ""
+        with self._metrics.timeit("query_stream"):
+            for chunk in qa.stream_query(question, top_k=top_k, chat_history=chat_history):
+                full_answer += chunk
+                yield chunk
         for chunk in qa.stream_query(question, top_k=top_k, chat_history=chat_history):
             full_answer += chunk
             yield chunk
@@ -563,6 +580,23 @@ class Orchestrator:
             回滚后的文档元数据.
         """
         return self._collection._doc_store.rollback_document(doc_id)
+
+    # ------------------------------------------------------------------
+    # 监控
+    # ------------------------------------------------------------------
+
+    @property
+    def metrics(self):
+        """监控指标收集器."""
+        return self._metrics
+
+    def get_monitoring_report(self) -> dict[str, Any]:
+        """获取监控报告.
+
+        Returns:
+            包含 timings、counters 和汇总信息的字典.
+        """
+        return self._metrics.get_report()
 
     # ------------------------------------------------------------------
     # Internal
