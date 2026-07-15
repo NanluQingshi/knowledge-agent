@@ -208,6 +208,7 @@ class Orchestrator:
         question: str,
         top_k: int = 5,
         use_graphrag: bool = False,
+        chat_history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """执行 RAG 问答.
 
@@ -215,12 +216,13 @@ class Orchestrator:
             question: 用户问题.
             top_k: 检索结果数量.
             use_graphrag: 是否同时使用 GraphRAG 检索增强.
+            chat_history: 可选的历史对话记录，每项为 {"role": ..., "content": ...}.
 
         Returns:
             QAAgent.query() 返回的结果字典.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
-        result = qa.query(question, top_k=top_k)
+        result = qa.query(question, top_k=top_k, chat_history=chat_history)
 
         # 将问答记录存入情景记忆
         try:
@@ -242,6 +244,7 @@ class Orchestrator:
         question: str,
         top_k: int = 5,
         use_graphrag: bool = False,
+        chat_history: list[dict[str, str]] | None = None,
     ):
         """执行流式 RAG 问答.
 
@@ -249,12 +252,33 @@ class Orchestrator:
             question: 用户问题.
             top_k: 检索结果数量.
             use_graphrag: 是否同时使用 GraphRAG 检索增强.
+            chat_history: 可选的历史对话记录，每项为 {"role": ..., "content": ...}.
 
         Yields:
             LLM 文本片段.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
-        yield from qa.stream_query(question, top_k=top_k)
+
+        # 收集流式输出并存入记忆
+        full_answer = ""
+        for chunk in qa.stream_query(question, top_k=top_k, chat_history=chat_history):
+            full_answer += chunk
+            yield chunk
+
+        # 流结束后存入情景记忆
+        if full_answer:
+            try:
+                self._episodic_memory.store_conversation(
+                    user_message=question,
+                    assistant_response=full_answer,
+                    metadata={
+                        "top_k": top_k,
+                        "use_graphrag": use_graphrag,
+                        "streamed": True,
+                    },
+                )
+            except Exception:
+                pass
 
     # ------------------------------------------------------------------
     # 统计分析
@@ -282,6 +306,55 @@ class Orchestrator:
             "storage": stats,
             "graph": graph_stats,
             "quality": quality_report,
+        }
+
+    # ------------------------------------------------------------------
+    # 记忆系统
+    # ------------------------------------------------------------------
+
+    def recall_memories(
+        self,
+        query: str,
+        top_k: int = 5,
+        memory_type: str | None = "conversation",
+    ) -> list[dict[str, Any]]:
+        """检索相关情景记忆.
+
+        Args:
+            query: 查询文本.
+            top_k: 返回数量.
+            memory_type: 记忆类型过滤 (conversation / action / observation).
+
+        Returns:
+            情景记忆列表.
+        """
+        try:
+            return self._episodic_memory.recall(
+                query=query,
+                top_k=top_k,
+                memory_type=memory_type,
+            )
+        except Exception:
+            return []
+
+    def get_memory_stats(self) -> dict[str, int]:
+        """获取记忆系统统计.
+
+        Returns:
+            包含 episodic_count、semantic_facts 的字典.
+        """
+        try:
+            episodic_count = self._episodic_memory.count()
+        except Exception:
+            episodic_count = 0
+        try:
+            semantic_facts = self._semantic_memory.fact_count
+        except Exception:
+            semantic_facts = 0
+
+        return {
+            "episodic_count": episodic_count,
+            "semantic_facts": semantic_facts,
         }
 
     # ------------------------------------------------------------------

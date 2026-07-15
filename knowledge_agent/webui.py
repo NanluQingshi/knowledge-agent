@@ -19,6 +19,15 @@ def _get_orchestrator() -> Orchestrator:
     return _ORCHESTRATOR
 
 
+def _recall_relevant_memories(query: str, top_k: int = 3) -> list[dict[str, Any]]:
+    """检索与当前查询语义相关的情景记忆（跨会话历史）."""
+    try:
+        orchestrator = _get_orchestrator()
+        return orchestrator._episodic_memory.recall(query, top_k=top_k, memory_type="conversation")
+    except Exception:
+        return []
+
+
 # ---------------------------------------------------------------------------
 # 底层逻辑
 # ---------------------------------------------------------------------------
@@ -117,14 +126,37 @@ def _ingest_url(url: str) -> str:
 
 
 def _answer_question(message: str, history: list[dict[str, str]]) -> str:
-    """RAG 问答（流式）."""
+    """RAG 问答（流式），支持多轮对话历史和跨会话记忆检索."""
     if not message or not message.strip():
         return "请输入问题。"
 
     orchestrator = _get_orchestrator()
 
+    # 检索相关历史记忆，注入到对话上下文中
+    relevant_memories = _recall_relevant_memories(message, top_k=3)
+    enriched_history = list(history)
+    if relevant_memories:
+        memory_context = "\n".join(
+            f"[Past Q&A: {m.get('text', '')[:200]}]"
+            for m in relevant_memories
+        )
+        # 添加一条系统级的记忆提示
+        enriched_history.insert(
+            0,
+            {
+                "role": "system",
+                "content": (
+                    "以下是从历史对话中检索到的相关记忆，可能对回答有帮助：\n"
+                    f"{memory_context}"
+                ),
+            },
+        )
+
     full_answer = ""
-    for chunk in orchestrator.run_query_stream(message):
+    for chunk in orchestrator.run_query_stream(
+        message,
+        chat_history=enriched_history,
+    ):
         full_answer += chunk
         yield full_answer
 
@@ -203,6 +235,7 @@ def _system_health() -> str:
     orchestrator = _get_orchestrator()
     report = orchestrator.get_system_report()
     health = orchestrator.get_knowledge_health()
+    memory_stats = orchestrator.get_memory_stats()
 
     storage = report.get("storage", {})
     graph = report.get("graph", {})
@@ -215,6 +248,10 @@ def _system_health() -> str:
         f"**向量库**: {storage.get('vector_store_size', 0)} 条",
         f"**文档库**: {storage.get('total_documents', 0)} 篇",
         f"**知识图谱**: {graph.get('nodes', 0)} 节点 / {graph.get('edges', 0)} 边",
+        "",
+        "## 🧠 记忆系统\n",
+        f"**情景记忆**: {memory_stats.get('episodic_count', 0)} 条",
+        f"**语义记忆**: {memory_stats.get('semantic_facts', 0)} 条事实",
         "",
         "## 📊 健康状态\n",
         f"**过期文档**: {quality.get('expired_documents', 0)}",
@@ -310,7 +347,6 @@ def _clear_memories() -> str:
         return f"❌ 清空失败: {exc}"
 
 
-
 # ---------------------------------------------------------------------------
 # Gradio 界面
 # ---------------------------------------------------------------------------
@@ -369,6 +405,13 @@ def create_ui() -> gr.Blocks:
                 title="",
                 description="输入问题开始对话",
                 type="messages",
+            )
+            with gr.Row():
+                clear_btn = gr.Button("🗑️ 清空对话历史", variant="stop", size="sm")
+                clear_output = gr.Markdown()
+            clear_btn.click(
+                fn=_clear_memories,
+                outputs=clear_output,
             )
 
         with gr.Tab("⚙️ 设置"):
