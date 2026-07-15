@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import uuid
 from datetime import datetime, timezone
@@ -155,10 +156,15 @@ class EvaluationDataset:
             return []
         try:
             with self._path.open("r", encoding="utf-8") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_SH)
                 return json.load(f)
         except (json.JSONDecodeError, OSError):
             return []
 
     def _save(self) -> None:
-        with self._path.open("w", encoding="utf-8") as f:
-            json.dump(self._items, f, ensure_ascii=False, indent=2)
+        try:
+            with self._path.open("w", encoding="utf-8") as f:
+                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                json.dump(self._items, f, ensure_ascii=False, indent=2)
+        except OSError:
+            pass

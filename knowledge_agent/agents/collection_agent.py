@@ -107,12 +107,16 @@ class CollectionAgent:
                     continue
 
                 for doc in documents:
-                    # 基于内容哈希的去重检测
                     content_hash = hashlib.sha256(doc.content.encode("utf-8")).hexdigest()
                     existing = self._doc_store.find_by_hash(content_hash)
                     if existing:
-                        # 相同内容已存在，跳过
                         continue
+
+                    # 检查同一来源是否有旧版本
+                    previous_version_id = ""
+                    prev_docs = self._doc_store.find_by_source(doc.source)
+                    if prev_docs:
+                        previous_version_id = prev_docs[0]["id"]
 
                     chunks = self._chunker.chunk(doc.content, doc.metadata)
                     if not chunks:
@@ -141,6 +145,7 @@ class CollectionAgent:
                         file_type=file_path.suffix.lower(),
                         chunk_count=len(chunks),
                         content_hash=content_hash,
+                        previous_version_id=previous_version_id,
                         metadata={
                             "original_metadata": doc.metadata,
                         },

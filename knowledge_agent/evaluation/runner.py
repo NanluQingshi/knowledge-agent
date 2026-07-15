@@ -71,7 +71,7 @@ class EvaluationRunner:
                 continue
 
             # 执行检索
-            retrieved = self._orchestrator._get_qa_agent()._retriever.retrieve(query, top_k=top_k)
+            retrieved = self._orchestrator.retrieve(query, top_k=top_k)
             retrieved_ids = [r.get("id", "") for r in retrieved]
 
             # 计算指标

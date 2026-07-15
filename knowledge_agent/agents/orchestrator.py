@@ -456,6 +456,30 @@ class Orchestrator:
         }
 
     # ------------------------------------------------------------------
+    # 检索
+    # ------------------------------------------------------------------
+
+    def retrieve(
+        self,
+        query: str,
+        top_k: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """执行混合检索（向量 + BM25），返回检索结果.
+
+        公开的检索接口，供 EvaluationRunner 等外部模块使用，
+        无需访问内部私有属性。
+
+        Args:
+            query: 查询文本.
+            top_k: 返回结果数量；默认使用 settings.retrieval_top_k.
+
+        Returns:
+            检索结果列表，每项含 id、text、metadata、score.
+        """
+        qa = self._get_qa_agent()
+        return qa._retriever.retrieve(query, top_k=top_k)
+
+    # ------------------------------------------------------------------
     # 文档管理
     # ------------------------------------------------------------------
 
@@ -510,6 +534,35 @@ class Orchestrator:
             pass
 
         return True
+
+    # ------------------------------------------------------------------
+    # 文档版本管理
+    # ------------------------------------------------------------------
+
+    def get_document_versions(self, doc_id: str) -> list[dict[str, Any]]:
+        """获取文档的版本历史.
+
+        Args:
+            doc_id: 文档 ID.
+
+        Returns:
+            版本历史列表，从最新到最旧.
+        """
+        try:
+            return self._collection._doc_store.get_document_versions(doc_id)
+        except Exception:
+            return []
+
+    def rollback_document(self, doc_id: str) -> dict[str, Any] | None:
+        """回滚文档到指定版本.
+
+        Args:
+            doc_id: 要回滚到的文档版本 ID.
+
+        Returns:
+            回滚后的文档元数据.
+        """
+        return self._collection._doc_store.rollback_document(doc_id)
 
     # ------------------------------------------------------------------
     # Internal

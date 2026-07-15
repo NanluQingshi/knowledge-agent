@@ -15,12 +15,25 @@ except ImportError:  # pragma: no cover
     _BM25_AVAILABLE = False
     BM25Okapi = None  # type: ignore[assignment]
 
+try:
+    import jieba
+
+    _JIEBA_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _JIEBA_AVAILABLE = False
+    jieba = None  # type: ignore[assignment]
+
+
+def _has_chinese(text: str) -> bool:
+    """检测文本是否包含中文字符."""
+    return bool(re.search(r"[\u4e00-\u9fff]", text))
+
 
 def _tokenize(text: str) -> list[str]:
     """将文本切分为 token 列表.
 
-    使用简单规则分词：按非字母数字字符分割，转为小写，过滤空串。
-    可根据需求替换为 jieba 等更强大的分词器。
+    对包含中文的文本优先使用 jieba 分词（词级），
+    否则按非字母数字字符分割，转为小写，过滤空串。
 
     Args:
         text: 原始文本.
@@ -28,6 +41,8 @@ def _tokenize(text: str) -> list[str]:
     Returns:
         Token 列表.
     """
+    if _has_chinese(text) and _JIEBA_AVAILABLE:
+        return [t for t in jieba.lcut(text) if t.strip()]
     return [t for t in re.split(r"[^a-zA-Z0-9\u4e00-\u9fff]+", text.lower()) if t]
 
 

@@ -74,6 +74,57 @@ def _ingest_files(files: list[str] | None) -> str:
     return "\n\n".join(results) if results else "未处理任何文件。"
 
 
+def _ingest_url(url: str) -> str:
+    """从 URL 抓取网页并摄入."""
+    if not url or not url.strip():
+        return "请输入 URL。"
+
+    url = url.strip()
+    from knowledge_agent.loaders.url_loader import UrlLoader
+
+    orchestrator = _get_orchestrator()
+    try:
+        loader = UrlLoader()
+        docs = loader.ingest_url(url)
+        if not docs:
+            return f"❌ 无法从 {url} 提取内容。"
+
+        # 逐文档摄入
+        total_chunks = 0
+        for doc in docs:
+            chunks = orchestrator._collection._chunker.chunk(doc.content, doc.metadata)
+            if not chunks:
+                continue
+
+            import uuid
+            chunk_ids = [uuid.uuid4().hex for _ in chunks]
+            chunk_texts = [c.text for c in chunks]
+            embeddings = orchestrator._collection._embedder.embed(chunk_texts)
+
+            metadatas = []
+            for c in chunks:
+                meta = dict(c.metadata)
+                meta["source"] = doc.source
+                metadatas.append(meta)
+
+            orchestrator._collection._vector_store.add(chunks, embeddings, metadatas, chunk_ids)
+            total_chunks += len(chunks)
+
+        # 注册到 DocStore
+        orchestrator._collection._doc_store.add_document(
+            doc_id=uuid.uuid4().hex,
+            source=url,
+            filename=url.rstrip("/").split("/")[-1] or "webpage",
+            file_type="url",
+            chunk_count=total_chunks,
+            metadata={"source_url": url},
+        )
+
+        return f"✅ **{url}**\n  - 文档: {len(docs)}\n  - 分块: {total_chunks}"
+    except (ImportError, RuntimeError) as exc:
+        return f"❌ {exc}"
+
+
 def _answer_question(message: str, history: list[dict[str, str]]) -> str:
     """RAG 问答（流式），支持多轮对话历史和跨会话记忆检索."""
     if not message or not message.strip():
@@ -130,17 +181,41 @@ def _list_documents() -> str:
     if docs:
         lines.append("")
         lines.append("### 文档列表")
-        lines.append("| ID | 文件名 | 类型 | Chunks | 时间 |")
-        lines.append("|----|--------|------|--------|------|")
+        lines.append("| ID | 文件名 | 类型 | 版本 | Chunks | 时间 |")
+        lines.append("|----|--------|------|------|--------|------|")
         for doc in docs[:50]:
             doc_id = doc["id"][:8] + "..."
+            version = doc.get("version", 1)
             lines.append(
                 f"| {doc_id} | {doc['filename']} | {doc['file_type']} | "
-                f"{doc['chunk_count']} | {doc['ingested_at'][:10]} |"
+                f"v{version} | {doc['chunk_count']} | {doc['ingested_at'][:10]} |"
             )
         if len(docs) > 50:
             lines.append(f"\n*... 还有 {len(docs) - 50} 篇文档*")
 
+    return "\n".join(lines)
+
+
+def _get_document_versions(doc_id: str) -> str:
+    """获取文档版本历史."""
+    if not doc_id or not doc_id.strip():
+        return "请输入文档 ID。"
+    orchestrator = _get_orchestrator()
+    versions = orchestrator.get_document_versions(doc_id.strip())
+    if not versions:
+        return f"未找到文档: {doc_id}"
+
+    lines = [f"### 文档版本历史: {versions[0].get('filename', 'unknown')}"]
+    for v in versions:
+        v_id = v["id"][:8] + "..."
+        v_num = v.get("version", "?")
+        rolled_back = v.get("metadata", {}).get("rolled_back", False)
+        tag = " ⬅️ 当前" if v == versions[0] else ""
+        tag += " 🔙 已回滚" if rolled_back else ""
+        lines.append(
+            f"- v{v_num} | ID: {v_id} | {v['ingested_at'][:10]} | "
+            f"{v['chunk_count']} chunks{tag}"
+        )
     return "\n".join(lines)
 
 
@@ -201,6 +276,67 @@ def _run_evaluation(mode: str) -> str:
     return result.get("summary", result.get("message", "评估完成。"))
 
 
+
+def _update_api_key(provider: str, key: str, base_url: str) -> str:
+    """更新 API Key 配置（运行时生效，不持久化到 .env）. """
+    if not key or not key.strip():
+        return f"❌ {provider} API Key 不能为空。"
+    try:
+        import os
+        if provider == "OpenAI":
+            os.environ["KA_OPENAI_API_KEY"] = key.strip()
+            if base_url:
+                os.environ["KA_OPENAI_BASE_URL"] = base_url.strip()
+        elif provider == "Anthropic":
+            os.environ["KA_ANTHROPIC_API_KEY"] = key.strip()
+        return f"✅ {provider} API Key 已更新（当前会话有效）。"
+    except Exception as exc:
+        return f"❌ 更新失败: {exc}"
+
+
+def _render_graph() -> str:
+    """生成知识图谱的 HTML 可视化."""
+    try:
+        from pyvis.network import Network
+    except ImportError:
+        return "pyvis 未安装，请执行: pip install pyvis"
+
+    import tempfile
+
+    orchestrator = _get_orchestrator()
+    graph = orchestrator._extraction._graph_store.graph
+
+    if graph.number_of_nodes() == 0:
+        return "知识图谱为空，请先摄入文档并执行知识抽取。"
+
+    net = Network(height="600px", width="100%", directed=True, bgcolor="#1a1a2e", font_color="white")
+
+    type_colors = {
+        "person": "#ff6b6b",
+        "organization": "#4ecdc4",
+        "technology": "#45b7d1",
+        "concept": "#f9ca24",
+        "location": "#a29bfe",
+        "date": "#fd79a8",
+        "other": "#dfe6e9",
+        "unknown": "#636e72",
+    }
+
+    for node, data in graph.nodes(data=True):
+        label = data.get("name", node)
+        etype = data.get("type", "unknown")
+        color = type_colors.get(etype, "#636e72")
+        net.add_node(node, label=label, title=label, color=color, size=15)
+
+    for u, v, data in graph.edges(data=True):
+        label = data.get("predicate", "related_to")
+        net.add_edge(u, v, title=label, label=label, arrows="to", font={"size": 10, "color": "#aaa"})
+
+    tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False, encoding="utf-8")
+    net.save_graph(tmp.name)
+    return tmp.name
+
+
 def _clear_memories() -> str:
     """清空情景记忆."""
     try:
@@ -247,6 +383,21 @@ def create_ui() -> gr.Blocks:
                 outputs=ingest_output,
             )
 
+            gr.Markdown("---\n### 🌐 从 URL 抓取")
+            with gr.Row():
+                url_input = gr.Textbox(
+                    label="网页 URL",
+                    placeholder="https://example.com/article",
+                    scale=3,
+                )
+                url_btn = gr.Button("🌐 抓取并摄入", variant="primary", scale=1)
+            url_output = gr.Markdown()
+            url_btn.click(
+                fn=_ingest_url,
+                inputs=url_input,
+                outputs=url_output,
+            )
+
         with gr.Tab("💬 智能问答"):
             gr.Markdown("### 基于 RAG 的知识问答\n基于已摄入的文档进行检索增强问答。")
             chatbot = gr.ChatInterface(
@@ -263,6 +414,31 @@ def create_ui() -> gr.Blocks:
                 outputs=clear_output,
             )
 
+        with gr.Tab("⚙️ 设置"):
+            gr.Markdown("### API Key 配置\n配置 LLM 和 Embedding 的 API Key（当前会话有效，重启后失效）。")
+            with gr.Row():
+                with gr.Column():
+                    gr.Markdown("#### OpenAI")
+                    openai_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
+                    openai_url = gr.Textbox(label="Base URL", placeholder="https://api.openai.com/v1")
+                    openai_btn = gr.Button("保存 OpenAI 配置", variant="primary")
+                    openai_out = gr.Markdown()
+                    openai_btn.click(
+                        fn=_update_api_key,
+                        inputs=[gr.State("OpenAI"), openai_key, openai_url],
+                        outputs=openai_out,
+                    )
+                with gr.Column():
+                    gr.Markdown("#### Anthropic")
+                    anth_key = gr.Textbox(label="API Key", type="password", placeholder="sk-ant-...")
+                    anth_btn = gr.Button("保存 Anthropic 配置", variant="primary")
+                    anth_out = gr.Markdown()
+                    anth_btn.click(
+                        fn=_update_api_key,
+                        inputs=[gr.State("Anthropic"), anth_key, gr.State("")],
+                        outputs=anth_out,
+                    )
+
         with gr.Tab("📚 文档列表"):
             refresh_btn = gr.Button("🔄 刷新", variant="secondary")
             doc_output = gr.Markdown(label="文档信息")
@@ -273,6 +449,21 @@ def create_ui() -> gr.Blocks:
             )
             # 页面加载时自动显示
             demo.load(_list_documents, outputs=doc_output)
+
+            gr.Markdown("---\n### 📋 版本历史")
+            with gr.Row():
+                ver_input = gr.Textbox(
+                    label="文档 ID",
+                    placeholder="输入文档 ID 查看版本历史...",
+                    scale=3,
+                )
+                ver_btn = gr.Button("查看版本", variant="secondary", scale=1)
+            ver_output = gr.Markdown()
+            ver_btn.click(
+                fn=_get_document_versions,
+                inputs=ver_input,
+                outputs=ver_output,
+            )
 
             gr.Markdown("---\n### 🗑️ 删除文档")
             with gr.Row():
@@ -287,6 +478,16 @@ def create_ui() -> gr.Blocks:
                 fn=_delete_document,
                 inputs=delete_input,
                 outputs=delete_output,
+            )
+
+        with gr.Tab("🕸️ 知识图谱"):
+            gr.Markdown("### 知识图谱可视化\n展示已提取的实体和关系网络。")
+            with gr.Row():
+                graph_btn = gr.Button("🔄 生成图谱", variant="primary", scale=1)
+                graph_html = gr.HTML(label="知识图谱")
+            graph_btn.click(
+                fn=_render_graph,
+                outputs=graph_html,
             )
 
         with gr.Tab("📊 系统状态"):
