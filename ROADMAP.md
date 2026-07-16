@@ -1,109 +1,136 @@
-# Phase 6: 修复与优化路线图
+# 知识沉淀 Agent — 路线图与完成状态
 
-> 补充 [PLAN.md](PLAN.md) 中 5 个 Phase 之后的修复与增强计划。  
-> 每个条目对应一个独立的 git commit，按优先级分批执行。
+> 记录项目所有迭代阶段、已完成功能和待办事项。  
+> 每个阶段对应一个或多个 git 分支，独立开发、合并到 main。
 
 ---
 
 ## 状态总览
 
-| 批次 | 条目 | 文件 | 状态 |
+| 阶段 | 主题 | 分支 | 状态 |
 |------|------|------|------|
-| 批 1 — Critical | 3 项 | `vector_store.py`, `cli.py`, `routes.py`, `episodic_memory.py`, `orchestrator.py` | ✅ 已完成 |
-| 批 2 — Major | 5 项 | `orchestrator.py`, `PLAN.md`, `collector.py`, `scorer.py`, `loaders/__init__.py`, `cli.py`, `routes.py`, `pyproject.toml` | ✅ 已完成 |
-| 批 3 — Minor | 4 项 | `quality_agent.py`, `freshness.py`, `base.py`, `recursive_chunker.py`, `semantic_chunker.py` | ✅ 已完成 |
-| 批 4 — Feature | 2 项 | `embedder.py`, `vector_store.py` | ✅ 已完成 |
+| Phase 1-5 | 原始开发计划（MLP → 完整系统） | `feature/implementation` | ✅ 已合并 |
+| Phase 6 | 修复与优化（CR-01 ~ NF-02） | `feature/phase6-fixes` | ✅ 已合并 |
+| Phase 7 | 功能增强 | 多个分支 | ✅ 已合并 |
+| Phase 8 | 监控与性能 | `feature/monitoring`、`feature/performance` | 🚀 待合并 |
+| 待办 | 下一步方向 | — | 📋 规划中 |
 
 ---
 
-## 批 1 🔴 Critical
+## Phase 1-5: 原始开发计划
 
-### CR-01 移除 VectorStore 内置 embedding function
-- **问题**: `VectorStore` 使用 `all-MiniLM-L6-v2` (384 维) 作为 ChromaDB 内置 embedding function，但系统中 `Embedder` 默认使用 OpenAI `text-embedding-3-small` (1536 维)。虽然 `add()` 传入了显式 embeddings，但 Collection 的内置函数与实际数据维度不匹配。
-- **方案**: 移除 `embedding_function` 参数，不设内置函数。所有 embedding 完全由外部 `Embedder` 管理。
-- **commit**: `b81c38f`
+PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 
-### CR-02 优化 BM25 索引构建
-- **问题**: 每次查询为构建 BM25 索引都执行 `vector_store.search(top_k=count())` 全量向量扫描，文档量增大后性能急剧恶化。
-- **方案**: 新增 `VectorStore.get_all_documents()` 方法直接读取存储数据（零向量计算），CLI 和 API 路由均改用此方法。
-- **commit**: `040e833`
+| Phase | 内容 | 状态 |
+|-------|------|------|
+| P1 | CLI + API + RAG 问答 | ✅ 已完成 |
+| P2 | 知识图谱 + GraphRAG | ✅ 已完成 |
+| P3 | 多 Agent 工作流 | ✅ 已完成 |
+| P4 | 四层记忆系统 | ✅ 已完成 |
+| P5 | 反馈闭环 | ✅ 已完成 |
 
-### CR-03 复用 VectorStore 的 ChromaDB 客户端
-- **问题**: `EpisodicMemory` 创建独立的 `PersistentClient` 实例和内置 embedding function，与系统共用的 `VectorStore` 写入同一持久化目录，可能导致数据竞争。
-- **方案**: 通过 `VectorStore.chroma_client` 属性暴露统一客户端，`EpisodicMemory` 复用该客户端创建独立 collection。
-- **commit**: `016b46a`
+**分支**: `feature/implementation` | **Commits**: 多个 | **状态**: ✅ 已合并到 main
 
 ---
 
-## 批 2 🟡 Major
+## Phase 6: 修复与优化
 
-### MJ-01 更新 LangGraph 文档状态
-- **问题**: PLAN.md 描述使用 LangGraph StateGraph，但实际实现为手动顺序编排。
-- **方案**: 更新 PLAN.md 中 Phase 3 描述和技术选型表格，反映实际决策。同时修复 `Orchestrator._get_qa_agent()` 中残留的 BM25 全量扫描。
-- **commit**: `1f5f955`
+基于项目评估报告识别的问题修复。
 
-### MJ-02 按文档粒度的反馈评分
-- **问题**: `KnowledgeScorer._get_usefulness_for_doc(doc_id)` 始终返回全局有用率，忽略了 doc_id。
-- **方案**: 新增 `FeedbackCollector.get_stats_for_doc(doc_id)`，在 `source_doc_ids` JSON 字段中搜索匹配记录。`KnowledgeScorer` 优先使用文档级统计，无记录时回退全局统计。
-- **commit**: `b5335f5`
+| 批次 | 条目 | 状态 |
+|------|------|------|
+| 🔴 Critical | CR-01 向量维度一致 / CR-02 BM25 优化 / CR-03 客户端复用 | ✅ 已完成 |
+| 🟡 Major | MJ-01~MJ-05 文档/反馈/重构/依赖/文件锁 | ✅ 已完成 |
+| 🟢 Minor | MN-01~MN-04 时间戳/docstring/代码抽取 | ✅ 已完成 |
+| 📋 Feature | NF-01 Embedder 回退 / NF-02 维度日志 | ✅ 已完成 |
 
-### MJ-03 提取重复的 `_all_loaders()`
-- **问题**: `cli.py` 和 `routes.py` 各自定义了完全相同的 `_all_loaders()` 函数。
-- **方案**: 抽取到 `knowledge_agent/loaders/__init__.py` 作为公共函数 `all_loaders()`，两处统一导入并清理不再直接使用的加载器导入。
-- **commit**: `e77fbd4`
-
-### MJ-04 移除未使用的依赖
-- **问题**: `pyproject.toml` 声明了 `langchain-text-splitters`，但代码中未使用。
-- **方案**: 从 `[tool.poetry.dependencies]` 中移除。
-- **commit**: `f62ba23`
-
-### MJ-05 文件锁保护 JSON 持久化
-- **问题**: `ProceduralMemory` 的 `_load()` / `_save()` 无并发保护，多进程场景可能数据丢失。
-- **方案**: 使用 `fcntl.flock` 加共享锁 (`LOCK_SH`) 读、排他锁 (`LOCK_EX`) 写。
-- **commit**: `4c8822a`
+**分支**: `feature/phase6-fixes` | **Commits**: 11 个 | **状态**: ✅ 已合并到 main
 
 ---
 
-## 批 3 🟢 Minor
+## Phase 7: 功能增强
 
-### MN-01 QualityAgent 时间戳比较
-- **问题**: `check_expired_documents()` 使用字符串 `<` 比较 ISO 时间戳。
-- **方案**: 解析为 `datetime` 对象后再比较，遇到无法解析的时间戳则跳过该文档。
-- **commit**: `1891055` (与本批其他条目合并)
+### 7.1 对话历史
 
-### MN-02 FreshnessManager 评分范围说明
-- **问题**: docstring 写 `0.0 ~ 1.0+` 但未说明何时会超过 1.0。
-- **方案**: 补充注释说明引用次数加成 (1+log(1+refs)) 可能导致评分超过 1.0，调用方可按需 clamp。
-- **commit**: `1891055` (与本批其他条目合并)
+| 功能 | 说明 |
+|------|------|
+| Orchestrator 透传 chat_history | `run_query()` / `run_query_stream()` 新增参数 |
+| Web UI 多轮对话 | Gradio history 传入 LLM，同一会话连贯问答 |
+| 跨会话记忆检索 | 新问题前自动检索相关历史记忆注入上下文 |
+| 公共记忆 API | `orchestrator.recall_memories()` / `get_memory_stats()` |
+| 清空历史按钮 | Web UI 问答 Tab 下方 |
 
-### MN-03 提取 `_count_tokens` 到基类
-- **问题**: `RecursiveChunker` 和 `SemanticChunker` 各自定义了相同的 `_count_tokens` 方法。
-- **方案**: 添加到 `BaseChunker` 作为静态方法 `count_tokens()`，子类通过 `self.count_tokens()` 调用。
-- **commit**: `1891055` (与本批其他条目合并)
+**分支**: `feature/chat-history` | **Commits**: 5 个 | **状态**: ✅ 已合并到 main
 
-### MN-04 SemanticChunker overlap 单位说明
-- **docstring 已明确** overlap 以**句子数**为单位，与 `chunk_size`（token 数）不同。本次仅做文档确认，无代码变更。
-- **commit**: `1891055` (与本批其他条目合并)
+### 7.2 打磨与完善
 
----
+| 功能 | 说明 |
+|------|------|
+| 封装 EvaluationRunner 私有访问 | 改为使用公共 `Orchestrator.retrieve()` |
+| EvaluationDataset 文件锁 | `fcntl` 保护 JSON 读写 |
+| CSVLoader 异常处理 | 窄化异常捕获范围 + 日志 |
+| Reranker 清理 | 移除无用 `settings` touch 语句 |
+| 中文分词优化 | BM25 集成 jieba 分词 |
+| URL 网页抓取 | UrlLoader + Web UI URL 输入 |
+| 知识图谱可视化 | pyvis 交互式实体关系图 |
+| 测试覆盖 | URL Loader + Web UI 冒烟测试 |
+| pre-commit hooks | ruff 自动化格式 + lint |
+| 文档版本管理 | 版本链追踪 + 回滚 |
+| API Key 管理 | Web UI 设置 Tab 动态配置 |
+| README 更新 | 同步所有新功能 |
 
-## 批 4 📋 New Features
-
-### NF-01 Embedder 本地回退
-- **问题**: 当 `openai_api_key` 为空时，`Embedder` 在 API 调用时才会失败。
-- **方案**: 构造时检查 API key 是否存在；不存在时跳过 OpenAI 客户端初始化。`embed()` 方法先尝试 API，失败时自动回退到 `sentence-transformers` 本地模型 (`all-MiniLM-L6-v2`)。
-- **commit**: `a1b0fc2`
-
-### NF-02 Embedding 维度日志
-- **问题**: 缺少 embedding 维度的可观测性，维度不匹配时难以排查。
-- **方案**: 在 `VectorStore.add()` 中添加 `logger.debug` 输出向量维度。
-- **commit**: `7f52e3c`
+**分支**: `feature/polish` | **Commits**: 10 个 | **状态**: ✅ 已合并到 main
 
 ---
 
-## 分支信息
+## Phase 8: 监控与性能
 
-- **分支**: `feature/phase6-fixes`
-- **基分支**: `feature/tests-and-deps`
-- **Commits**: 11 个
-- **状态**: ✅ 全部完成
+### 8.1 监控与可观测性
+
+| 功能 | 文件 | 说明 |
+|------|------|------|
+| 结构化日志 | `monitoring/logger.py` | JSON 格式，含时间戳/级别/trace_id |
+| 性能指标 | `monitoring/metrics.py` | P50/P95/P99 延迟统计 + 计数器 |
+| 请求追踪 | `monitoring/tracer.py` | 每个请求唯一 Trace ID，ContextVar 传递 |
+| 监控面板 | Web UI 📈 监控 Tab | 实时显示操作耗时和请求计数，支持重置 |
+| CLI 集成 | `cli.py` | 启动时初始化结构化日志 |
+
+**分支**: `feature/monitoring` | **Commits**: 1 个 | **状态**: 🚀 待合并到 main
+
+### 8.2 性能优化与缓存
+
+| 功能 | 文件 | 说明 |
+|------|------|------|
+| 查询结果缓存 | `cache.py` | LRU 淘汰 + TTL 过期，重复提问直接返回 |
+| 并行批量摄入 | `collection_agent.py` | `ingest_path_parallel()` 多线程并发处理 |
+| 缓存统计 | Web UI | 缓存命中条数查询 |
+
+**分支**: `feature/performance` | **Commits**: 1 个 | **状态**: 🚀 待合并到 main
+
+---
+
+## 待办事项（规划中）
+
+| 优先级 | 方向 | 说明 |
+|--------|------|------|
+| ⭐ | CI/CD 自动化 | GitHub Actions：ruff check + pytest + 自动发布 |
+| ⭐ | Docker 部署 | Dockerfile + docker-compose，一键启动 |
+| | 搜索增强 | Query Rewriting、HyDE 检索、多查询融合 |
+| | 知识库搜索/浏览 | 全文搜索、标签/分类过滤 |
+| | 知识库导出 | 导出为 Markdown / JSON / CSV |
+| | 多模态支持 | 图片理解、OCR |
+
+---
+
+## 分支索引
+
+| 分支 | 主题 | Commits | 状态 |
+|------|------|---------|------|
+| `main` | 主线 | — | 最新发布 |
+| `feature/implementation` | Phase 1-5 原始开发 | 多个 | ✅ 已合并 |
+| `feature/phase6-fixes` | Phase 6 修复 | 11 | ✅ 已合并 |
+| `feature/chat-history` | 对话历史 | 5 | ✅ 已合并 |
+| `feature/web-ui` | Web UI | 1 | ✅ 已合并 |
+| `feature/polish` | 打磨完善 | 10 | ✅ 已合并 |
+| `feature/monitoring` | 监控与可观测性 | 1 | 🚀 待合并 |
+| `feature/performance` | 性能优化与缓存 | 1 | 🚀 待合并 |
