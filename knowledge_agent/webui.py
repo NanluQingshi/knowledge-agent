@@ -337,6 +337,54 @@ def _render_graph() -> str:
     return tmp.name
 
 
+def _monitoring_dashboard() -> str:
+    """监控仪表盘 — 显示性能指标和计数器."""
+    try:
+        orchestrator = _get_orchestrator()
+        report = orchestrator.get_monitoring_report()
+        timings = report.get("timings", {})
+        counters = report.get("counters", {})
+
+        lines = ["## 📊 性能指标\n"]
+
+        if timings:
+            lines.append("### 操作耗时 (ms)\n")
+            lines.append("| 操作 | 次数 | 均值 | P50 | P95 | P99 | 最大 |")
+            lines.append("|------|------|------|-----|-----|-----|------|")
+            for op, stats in timings.items():
+                if stats.get("count", 0) > 0:
+                    lines.append(
+                        f"| {op} | {stats['count']} | {stats['mean']} | "
+                        f"{stats['p50']} | {stats['p95']} | {stats['p99']} | {stats['max']} |"
+                    )
+        else:
+            lines.append("暂无性能数据。\n")
+
+        if counters:
+            lines.append("\n### 计数器\n")
+            lines.append("| 指标 | 值 |")
+            lines.append("|------|-----|")
+            for name, value in sorted(counters.items()):
+                lines.append(f"| {name} | {value} |")
+
+        if not timings and not counters:
+            lines.append("暂无监控数据。请先执行一些操作（问答、摄入等）。")
+
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"❌ 获取监控数据失败: {exc}"
+
+
+def _reset_metrics() -> str:
+    """重置监控指标."""
+    try:
+        orchestrator = _get_orchestrator()
+        orchestrator.metrics.reset()
+        return "✅ 监控指标已重置。"
+    except Exception as exc:
+        return f"❌ 重置失败: {exc}"
+
+
 def _clear_memories() -> str:
     """清空情景记忆."""
     try:
@@ -413,6 +461,22 @@ def create_ui() -> gr.Blocks:
                 fn=_clear_memories,
                 outputs=clear_output,
             )
+
+        with gr.Tab("📈 监控"):
+            gr.Markdown("### 系统监控仪表盘\n实时显示性能指标和请求计数。")
+            with gr.Row():
+                refresh_mon_btn = gr.Button("🔄 刷新", variant="primary", scale=1)
+                reset_mon_btn = gr.Button("🔄 重置指标", variant="stop", scale=1)
+            mon_output = gr.Markdown(label="监控数据")
+            refresh_mon_btn.click(
+                fn=_monitoring_dashboard,
+                outputs=mon_output,
+            )
+            reset_mon_btn.click(
+                fn=_reset_metrics,
+                outputs=mon_output,
+            )
+            demo.load(_monitoring_dashboard, outputs=mon_output)
 
         with gr.Tab("⚙️ 设置"):
             gr.Markdown("### API Key 配置\n配置 LLM 和 Embedding 的 API Key（当前会话有效，重启后失效）。")

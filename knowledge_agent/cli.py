@@ -245,6 +245,8 @@ def webui_cmd(host: str, port: int, share: bool) -> None:
 
 def main() -> None:
     """入口函数."""
+    from knowledge_agent.monitoring.logger import setup_logging
+    setup_logging()
     cli()
 
 
