@@ -337,6 +337,16 @@ def _render_graph() -> str:
     return tmp.name
 
 
+def _cache_stats() -> str:
+    """查询缓存统计."""
+    try:
+        from knowledge_agent.cache import QueryCache
+        cache = QueryCache()
+        return f"**查询缓存**: {cache.size} 条 (TTL: 300s, 上限: 100 条)"
+    except Exception:
+        return "缓存未启用。"
+
+
 def _clear_memories() -> str:
     """清空情景记忆."""
     try:

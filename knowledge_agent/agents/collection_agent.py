@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -167,6 +168,128 @@ class CollectionAgent:
             "chunks_created": total_chunks,
             "files_processed": files_processed,
             "errors": errors,
+        }
+
+    def ingest_path_parallel(
+        self,
+        path: str | Path,
+        max_workers: int = 4,
+    ) -> dict[str, Any]:
+        """并行批量摄入（使用线程池加速大批量文件处理）.
+
+        对目录中的每个文件使用独立的线程处理，互不阻塞。
+        每个文件内部的加载、分块、向量化、存储是串行的。
+
+        Args:
+            path: 文件路径或目录路径.
+            max_workers: 最大并发线程数，默认 4.
+
+        Returns:
+            与 ingest_path() 相同格式的摘要字典.
+        """
+        target = Path(path)
+        if not target.exists():
+            return {
+                "documents_loaded": 0,
+                "chunks_created": 0,
+                "files_processed": 0,
+                "errors": [{"file": str(target), "error": "Path does not exist"}],
+            }
+
+        files = self._collect_files(target)
+        if not files:
+            return {
+                "documents_loaded": 0,
+                "chunks_created": 0,
+                "files_processed": 0,
+                "errors": [],
+            }
+
+        total_docs = 0
+        total_chunks = 0
+        all_errors: list[dict[str, str]] = []
+
+        # 每个线程使用独立的 Embedder 和 VectorStore（避免连接冲突）
+        def _process_one(fp: Path) -> dict[str, Any]:
+            """处理单个文件."""
+            try:
+                loader = self._match_loader(fp)
+                if loader is None:
+                    return {"docs": 0, "chunks": 0}
+
+                documents = loader.load(fp)
+                if not documents:
+                    return {"docs": 0, "chunks": 0}
+
+                local_embedder = Embedder()
+                local_vector_store = VectorStore()
+                local_doc_store = DocStore()
+                local_chunker = RecursiveChunker(
+                    chunk_size=settings.chunk_size,
+                    chunk_overlap=settings.chunk_overlap,
+                )
+
+                doc_count = 0
+                chunk_count = 0
+                for doc in documents:
+                    content_hash = hashlib.sha256(doc.content.encode("utf-8")).hexdigest()
+                    existing = local_doc_store.find_by_hash(content_hash)
+                    if existing:
+                        continue
+
+                    chunks = local_chunker.chunk(doc.content, doc.metadata)
+                    if not chunks:
+                        continue
+
+                    doc_id = uuid.uuid4().hex
+                    chunk_ids = [f"{doc_id}_chunk_{c.chunk_index}" for c in chunks]
+                    chunk_texts = [c.text for c in chunks]
+                    embeddings = local_embedder.embed(chunk_texts)
+
+                    metadatas = []
+                    for c in chunks:
+                        meta = dict(c.metadata)
+                        meta["doc_id"] = doc_id
+                        meta["source"] = doc.source
+                        metadatas.append(meta)
+
+                    local_vector_store.add(chunks, embeddings, metadatas, chunk_ids)
+                    local_doc_store.add_document(
+                        doc_id=doc_id,
+                        source=doc.source,
+                        filename=Path(doc.source).name if doc.source else fp.name,
+                        file_type=fp.suffix.lower(),
+                        chunk_count=len(chunks),
+                        content_hash=content_hash,
+                        metadata={"original_metadata": doc.metadata},
+                    )
+
+                    doc_count += 1
+                    chunk_count += len(chunks)
+
+                return {"docs": doc_count, "chunks": chunk_count}
+
+            except Exception as exc:
+                return {"error": str(exc)}
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = {executor.submit(_process_one, fp): fp for fp in files}
+            for future in as_completed(futures):
+                result = future.result()
+                if "error" in result:
+                    all_errors.append({
+                        "file": str(futures[future]),
+                        "error": result["error"],
+                    })
+                else:
+                    total_docs += result["docs"]
+                    total_chunks += result["chunks"]
+
+        return {
+            "documents_loaded": total_docs,
+            "chunks_created": total_chunks,
+            "files_processed": len(files),
+            "errors": all_errors,
         }
 
     def ingest_text(

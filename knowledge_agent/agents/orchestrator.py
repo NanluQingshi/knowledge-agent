@@ -85,6 +85,10 @@ class Orchestrator:
         self._bm25_retriever: BM25Retriever | None = None
         self._last_vector_count: int = 0
 
+        # 查询结果缓存
+        from knowledge_agent.cache import QueryCache
+        self._query_cache = QueryCache(ttl=300, max_size=100)
+
     # ------------------------------------------------------------------
     # 全流程管道
     # ------------------------------------------------------------------
@@ -222,7 +226,20 @@ class Orchestrator:
             QAAgent.query() 返回的结果字典.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
+
+        # 检查缓存（无历史时才使用缓存）
+        if not chat_history:
+            cache_key = f"query:{question}:{top_k}:{use_graphrag}"
+            cached = self._query_cache.get(cache_key)
+            if cached is not None:
+                return cached
+
         result = qa.query(question, top_k=top_k, chat_history=chat_history)
+
+        # 缓存结果（无历史时）
+        if not chat_history:
+            cache_key = f"query:{question}:{top_k}:{use_graphrag}"
+            self._query_cache.set(cache_key, result)
 
         # 将问答记录存入情景记忆
         try:
