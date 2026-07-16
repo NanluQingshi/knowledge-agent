@@ -33,15 +33,17 @@ def _recall_relevant_memories(query: str, top_k: int = 3) -> list[dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
-def _ingest_files(files: list[str] | None) -> str:
+def _ingest_files(files: list[str] | None, progress: gr.Progress = gr.Progress()) -> str:
     """上传并摄入文档."""
     if not files:
         return "请先上传文件。"
 
     orchestrator = _get_orchestrator()
+    progress(0, desc="准备摄入...")
     results: list[str] = []
 
-    for f in files:
+    for i, f in enumerate(files):
+        progress((i + 1) / len(files), desc=f"正在摄入: {Path(f).name}")
         path = Path(f)
         if not path.exists():
             results.append(f"❌ {path.name}: 文件不存在")
@@ -74,7 +76,7 @@ def _ingest_files(files: list[str] | None) -> str:
     return "\n\n".join(results) if results else "未处理任何文件。"
 
 
-def _ingest_url(url: str) -> str:
+def _ingest_url(url: str, progress: gr.Progress = gr.Progress()) -> str:
     """从 URL 抓取网页并摄入."""
     if not url or not url.strip():
         return "请输入 URL。"
@@ -83,6 +85,7 @@ def _ingest_url(url: str) -> str:
     from knowledge_agent.loaders.url_loader import UrlLoader
 
     orchestrator = _get_orchestrator()
+    progress(0, desc="正在抓取网页...")
     try:
         loader = UrlLoader()
         docs = loader.ingest_url(url)
@@ -92,6 +95,7 @@ def _ingest_url(url: str) -> str:
         # 逐文档摄入
         total_chunks = 0
         for doc in docs:
+            progress(0.5, desc="正在分块和向量化...")
             chunks = orchestrator._collection._chunker.chunk(doc.content, doc.metadata)
             if not chunks:
                 continue

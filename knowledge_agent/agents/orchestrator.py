@@ -630,19 +630,26 @@ class Orchestrator:
         return qa
 
     def _update_bm25_index(self) -> None:
-        """刷新 BM25 索引（增量更新）."""
-        from knowledge_agent.storage.vector_store import VectorStore
+        """刷新 BM25 索引（增量更新，懒加载）. """
+        try:
+            from knowledge_agent.storage.vector_store import VectorStore
 
-        vector_store = VectorStore()
-        current_count = vector_store.count()
-        if current_count == 0:
-            self._last_vector_count = 0
-            return
+            vector_store = VectorStore()
+            current_count = vector_store.count()
+            if current_count == 0:
+                self._last_vector_count = 0
+                return
 
-        if self._bm25_retriever is None:
-            self._bm25_retriever = BM25Retriever()
+            # 只有数据有变化时才重建索引
+            if current_count == self._last_vector_count and self._bm25_retriever is not None:
+                return
 
-        corpus = vector_store.get_all_documents()
-        if corpus:
-            self._bm25_retriever.index(corpus)
-            self._last_vector_count = current_count
+            if self._bm25_retriever is None:
+                self._bm25_retriever = BM25Retriever()
+
+            corpus = vector_store.get_all_documents()
+            if corpus:
+                self._bm25_retriever.index(corpus)
+                self._last_vector_count = current_count
+        except Exception:
+            pass

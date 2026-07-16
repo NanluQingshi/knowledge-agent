@@ -75,15 +75,19 @@ def ingest(path: Path, extract: bool, quality: bool) -> None:
 @click.option("--graphrag", is_flag=True, default=False, help="启用 GraphRAG 增强检索")
 def query(question: str, top_k: int, graphrag: bool) -> None:
     """提问 — RAG 检索增强问答."""
+    import time
     from knowledge_agent.agents.orchestrator import Orchestrator
 
     console.print(f"[bold]Question:[/bold] {question}\n")
     console.print("[bold]Retrieving context...[/bold]")
 
+    start = time.perf_counter()
     orchestrator = Orchestrator()
     result = orchestrator.run_query(question, top_k=top_k, use_graphrag=graphrag)
+    elapsed = (time.perf_counter() - start) * 1000
 
     console.print(f"\n[bold green]Answer:[/bold green]\n{result['answer']}\n")
+    console.print(f"[dim]Query took {elapsed:.0f}ms[/dim]")
 
     if result.get("sources"):
         console.print("[bold]Sources:[/bold]")
