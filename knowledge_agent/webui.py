@@ -129,7 +129,7 @@ def _ingest_url(url: str, progress: gr.Progress = gr.Progress()) -> str:
         return f"❌ {exc}"
 
 
-def _answer_question(message: str, history: list[dict[str, str]]) -> str:
+def _answer_question(message: str, history: list[dict[str, str]], use_enhanced: bool = False) -> str:
     """RAG 问答（流式），支持多轮对话历史和跨会话记忆检索."""
     if not message or not message.strip():
         return "请输入问题。"
@@ -160,6 +160,7 @@ def _answer_question(message: str, history: list[dict[str, str]]) -> str:
     for chunk in orchestrator.run_query_stream(
         message,
         chat_history=enriched_history,
+        use_enhanced_search=use_enhanced,
     ):
         full_answer += chunk
         yield full_answer
@@ -414,11 +415,17 @@ def create_ui() -> gr.Blocks:
 
         with gr.Tab("💬 智能问答"):
             gr.Markdown("### 基于 RAG 的知识问答\n基于已摄入的文档进行检索增强问答。")
+            enhance_checkbox = gr.Checkbox(
+                label="🔍 搜索增强（查询改写 + HyDE + 多查询融合）",
+                value=False,
+                info="启用后自动扩展查询，提升检索召回率，但响应会稍慢",
+            )
             chatbot = gr.ChatInterface(
                 fn=_answer_question,
                 title="",
                 description="输入问题开始对话",
                 type="messages",
+                additional_inputs=[enhance_checkbox],
             )
             with gr.Row():
                 clear_btn = gr.Button("🗑️ 清空对话历史", variant="stop", size="sm")
