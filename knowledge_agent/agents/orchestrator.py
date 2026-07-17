@@ -212,6 +212,7 @@ class Orchestrator:
         question: str,
         top_k: int = 5,
         use_graphrag: bool = False,
+        use_enhanced_search: bool = False,
         chat_history: list[dict[str, str]] | None = None,
     ) -> dict[str, Any]:
         """执行 RAG 问答.
@@ -220,6 +221,7 @@ class Orchestrator:
             question: 用户问题.
             top_k: 检索结果数量.
             use_graphrag: 是否同时使用 GraphRAG 检索增强.
+            use_enhanced_search: 是否启用搜索增强（查询改写 + HyDE + 多查询融合）.
             chat_history: 可选的历史对话记录，每项为 {"role": ..., "content": ...}.
 
         Returns:
@@ -228,17 +230,20 @@ class Orchestrator:
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
 
         # 检查缓存（无历史时才使用缓存）
+        cache_key = f"query:{question}:{top_k}:{use_graphrag}:{use_enhanced_search}"
         if not chat_history:
-            cache_key = f"query:{question}:{top_k}:{use_graphrag}"
             cached = self._query_cache.get(cache_key)
             if cached is not None:
                 return cached
+
+        # 搜索增强：查询改写 + HyDE + 多查询融合
+        if use_enhanced_search:
+            question = self._enhance_query(question, top_k)
 
         result = qa.query(question, top_k=top_k, chat_history=chat_history)
 
         # 缓存结果（无历史时）
         if not chat_history:
-            cache_key = f"query:{question}:{top_k}:{use_graphrag}"
             self._query_cache.set(cache_key, result)
 
         # 将问答记录存入情景记忆
@@ -261,6 +266,7 @@ class Orchestrator:
         question: str,
         top_k: int = 5,
         use_graphrag: bool = False,
+        use_enhanced_search: bool = False,
         chat_history: list[dict[str, str]] | None = None,
     ):
         """执行流式 RAG 问答.
@@ -269,16 +275,22 @@ class Orchestrator:
             question: 用户问题.
             top_k: 检索结果数量.
             use_graphrag: 是否同时使用 GraphRAG 检索增强.
-            chat_history: 可选的历史对话记录，每项为 {"role": ..., "content": ...}.
+            use_enhanced_search: 是否启用搜索增强.
+            chat_history: 可选的历史对话记录.
 
         Yields:
             LLM 文本片段.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
 
+        # 搜索增强
+        enhanced_question = question
+        if use_enhanced_search:
+            enhanced_question = self._enhance_query(question, top_k)
+
         # 收集流式输出并存入记忆
         full_answer = ""
-        for chunk in qa.stream_query(question, top_k=top_k, chat_history=chat_history):
+        for chunk in qa.stream_query(enhanced_question, top_k=top_k, chat_history=chat_history):
             full_answer += chunk
             yield chunk
 
@@ -580,6 +592,64 @@ class Orchestrator:
             回滚后的文档元数据.
         """
         return self._collection._doc_store.rollback_document(doc_id)
+
+    # ------------------------------------------------------------------
+    # 搜索增强
+    # ------------------------------------------------------------------
+
+    def _enhance_query(self, question: str, top_k: int) -> str:
+        """搜索增强：查询改写 + HyDE + 多查询融合.
+
+        使用 MultiQueryFusion 扩展查询后，用向量检索器分别检索，
+        将融合后的结果作为上下文追加到原始查询中。
+
+        Args:
+            question: 用户原始问题.
+            top_k: 检索数量.
+
+        Returns:
+            增强后的查询字符串（含融合上下文的摘要）.
+        """
+        try:
+            from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+            from knowledge_agent.storage.vector_store import VectorStore
+            from knowledge_agent.embeddings.embedder import Embedder
+            from knowledge_agent.retrieval.vector_retriever import VectorRetriever
+
+            fusion = MultiQueryFusion()
+            expanded = fusion.expand_queries(question)
+            if len(expanded) <= 1:
+                return question
+
+            # 对每个扩展查询执行向量检索
+            vector_store = VectorStore()
+            embedder = Embedder()
+            retriever = VectorRetriever(vector_store=vector_store, embedder=embedder)
+
+            all_results = []
+            for q in expanded:
+                try:
+                    results = retriever.retrieve(q, top_k=top_k)
+                    if results:
+                        all_results.append(results)
+                except Exception:
+                    continue
+
+            if not all_results:
+                return question
+
+            # 融合结果
+            fused = MultiQueryFusion.fuse_results(all_results, top_k=top_k)
+            if not fused:
+                return question
+
+            # 将融合结果摘要追加到原始查询
+            context_summary = "\n".join(
+                f"- {r.get('text', '')[:200]}" for r in fused[:3]
+            )
+            return f"{question}\n\nRelevant context:\n{context_summary}"
+        except Exception:
+            return question
 
     # ------------------------------------------------------------------
     # Internal
