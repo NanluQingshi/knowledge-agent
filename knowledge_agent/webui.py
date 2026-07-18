@@ -435,6 +435,22 @@ def create_ui() -> gr.Blocks:
                 outputs=clear_output,
             )
 
+        with gr.Tab("📈 监控"):
+            gr.Markdown("### 系统监控仪表盘\n实时显示性能指标和请求计数。")
+            with gr.Row():
+                refresh_mon_btn = gr.Button("🔄 刷新", variant="primary", scale=1)
+                reset_mon_btn = gr.Button("🔄 重置指标", variant="stop", scale=1)
+            mon_output = gr.Markdown(label="监控数据")
+            refresh_mon_btn.click(
+                fn=_monitoring_dashboard,
+                outputs=mon_output,
+            )
+            reset_mon_btn.click(
+                fn=_reset_metrics,
+                outputs=mon_output,
+            )
+            demo.load(_monitoring_dashboard, outputs=mon_output)
+
         with gr.Tab("⚙️ 设置"):
             gr.Markdown("### API Key 配置\n配置 LLM 和 Embedding 的 API Key（当前会话有效，重启后失效）。")
             with gr.Row():
