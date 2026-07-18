@@ -33,15 +33,17 @@ def _recall_relevant_memories(query: str, top_k: int = 3) -> list[dict[str, Any]
 # ---------------------------------------------------------------------------
 
 
-def _ingest_files(files: list[str] | None) -> str:
+def _ingest_files(files: list[str] | None, progress: gr.Progress = gr.Progress()) -> str:
     """上传并摄入文档."""
     if not files:
         return "请先上传文件。"
 
     orchestrator = _get_orchestrator()
+    progress(0, desc="准备摄入...")
     results: list[str] = []
 
-    for f in files:
+    for i, f in enumerate(files):
+        progress((i + 1) / len(files), desc=f"正在摄入: {Path(f).name}")
         path = Path(f)
         if not path.exists():
             results.append(f"❌ {path.name}: 文件不存在")
@@ -74,7 +76,7 @@ def _ingest_files(files: list[str] | None) -> str:
     return "\n\n".join(results) if results else "未处理任何文件。"
 
 
-def _ingest_url(url: str) -> str:
+def _ingest_url(url: str, progress: gr.Progress = gr.Progress()) -> str:
     """从 URL 抓取网页并摄入."""
     if not url or not url.strip():
         return "请输入 URL。"
@@ -83,6 +85,7 @@ def _ingest_url(url: str) -> str:
     from knowledge_agent.loaders.url_loader import UrlLoader
 
     orchestrator = _get_orchestrator()
+    progress(0, desc="正在抓取网页...")
     try:
         loader = UrlLoader()
         docs = loader.ingest_url(url)
@@ -92,6 +95,7 @@ def _ingest_url(url: str) -> str:
         # 逐文档摄入
         total_chunks = 0
         for doc in docs:
+            progress(0.5, desc="正在分块和向量化...")
             chunks = orchestrator._collection._chunker.chunk(doc.content, doc.metadata)
             if not chunks:
                 continue
@@ -125,7 +129,7 @@ def _ingest_url(url: str) -> str:
         return f"❌ {exc}"
 
 
-def _answer_question(message: str, history: list[dict[str, str]]) -> str:
+def _answer_question(message: str, history: list[dict[str, str]], use_enhanced: bool = False) -> str:
     """RAG 问答（流式），支持多轮对话历史和跨会话记忆检索."""
     if not message or not message.strip():
         return "请输入问题。"
@@ -156,6 +160,7 @@ def _answer_question(message: str, history: list[dict[str, str]]) -> str:
     for chunk in orchestrator.run_query_stream(
         message,
         chat_history=enriched_history,
+        use_enhanced_search=use_enhanced,
     ):
         full_answer += chunk
         yield full_answer
@@ -337,52 +342,14 @@ def _render_graph() -> str:
     return tmp.name
 
 
-def _monitoring_dashboard() -> str:
-    """监控仪表盘 — 显示性能指标和计数器."""
+def _cache_stats() -> str:
+    """查询缓存统计."""
     try:
-        orchestrator = _get_orchestrator()
-        report = orchestrator.get_monitoring_report()
-        timings = report.get("timings", {})
-        counters = report.get("counters", {})
-
-        lines = ["## 📊 性能指标\n"]
-
-        if timings:
-            lines.append("### 操作耗时 (ms)\n")
-            lines.append("| 操作 | 次数 | 均值 | P50 | P95 | P99 | 最大 |")
-            lines.append("|------|------|------|-----|-----|-----|------|")
-            for op, stats in timings.items():
-                if stats.get("count", 0) > 0:
-                    lines.append(
-                        f"| {op} | {stats['count']} | {stats['mean']} | "
-                        f"{stats['p50']} | {stats['p95']} | {stats['p99']} | {stats['max']} |"
-                    )
-        else:
-            lines.append("暂无性能数据。\n")
-
-        if counters:
-            lines.append("\n### 计数器\n")
-            lines.append("| 指标 | 值 |")
-            lines.append("|------|-----|")
-            for name, value in sorted(counters.items()):
-                lines.append(f"| {name} | {value} |")
-
-        if not timings and not counters:
-            lines.append("暂无监控数据。请先执行一些操作（问答、摄入等）。")
-
-        return "\n".join(lines)
-    except Exception as exc:
-        return f"❌ 获取监控数据失败: {exc}"
-
-
-def _reset_metrics() -> str:
-    """重置监控指标."""
-    try:
-        orchestrator = _get_orchestrator()
-        orchestrator.metrics.reset()
-        return "✅ 监控指标已重置。"
-    except Exception as exc:
-        return f"❌ 重置失败: {exc}"
+        from knowledge_agent.cache import QueryCache
+        cache = QueryCache()
+        return f"**查询缓存**: {cache.size} 条 (TTL: 300s, 上限: 100 条)"
+    except Exception:
+        return "缓存未启用。"
 
 
 def _clear_memories() -> str:
@@ -448,11 +415,17 @@ def create_ui() -> gr.Blocks:
 
         with gr.Tab("💬 智能问答"):
             gr.Markdown("### 基于 RAG 的知识问答\n基于已摄入的文档进行检索增强问答。")
+            enhance_checkbox = gr.Checkbox(
+                label="🔍 搜索增强（查询改写 + HyDE + 多查询融合）",
+                value=False,
+                info="启用后自动扩展查询，提升检索召回率，但响应会稍慢",
+            )
             chatbot = gr.ChatInterface(
                 fn=_answer_question,
                 title="",
                 description="输入问题开始对话",
                 type="messages",
+                additional_inputs=[enhance_checkbox],
             )
             with gr.Row():
                 clear_btn = gr.Button("🗑️ 清空对话历史", variant="stop", size="sm")
