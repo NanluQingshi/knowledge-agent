@@ -387,7 +387,7 @@ def create_ui() -> gr.Blocks:
             file_input = gr.File(
                 label="选择文件",
                 file_count="multiple",
-                file_types=[".txt", ".md", ".pdf", ".log", ".csv", ".json"],
+                file_types=[".txt", ".md", ".pdf", ".log", ".csv", ".json", ".png", ".jpg", ".jpeg", ".gif", ".webp"],
             )
             ingest_btn = gr.Button("🚀 开始摄入", variant="primary")
             ingest_output = gr.Markdown(label="摄入结果")
