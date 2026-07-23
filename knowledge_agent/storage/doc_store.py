@@ -219,6 +219,88 @@ class DocStore:
         docs = self.find_by_source(source)
         return docs[0] if docs else None
 
+    def search_documents(self, keyword: str) -> list[dict[str, Any]]:
+        """按关键词搜索文档（匹配文件名和来源）.
+
+        Args:
+            keyword: 搜索关键词.
+
+        Returns:
+            匹配的文档列表.
+        """
+        if not keyword or not keyword.strip():
+            return self.list_documents()
+        kw = f"%{keyword.strip()}%"
+        with self._connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM documents WHERE filename LIKE ? OR source LIKE ? "
+                "ORDER BY ingested_at DESC",
+                (kw, kw),
+            ).fetchall()
+        return [self._row_to_dict(row) for row in rows]
+
+    def search_by_tag(self, tag: str) -> list[dict[str, Any]]:
+        """按标签搜索文档（标签存储在 metadata_json 中）.
+
+        Args:
+            tag: 标签名称.
+
+        Returns:
+            匹配的文档列表.
+        """
+        if not tag:
+            return []
+        all_docs = self.list_documents()
+        tag_lower = tag.strip().lower()
+        result = []
+        for doc in all_docs:
+            meta = doc.get("metadata", {})
+            tags = meta.get("tags", [])
+            if any(t.lower() == tag_lower for t in tags):
+                result.append(doc)
+        return result
+
+    def add_tag(self, doc_id: str, tag: str) -> bool:
+        """为文档添加标签.
+
+        Args:
+            doc_id: 文档 ID.
+            tag: 标签名称.
+
+        Returns:
+            是否成功.
+        """
+        doc = self.get_document(doc_id)
+        if doc is None:
+            return False
+        meta = doc.get("metadata", {})
+        tags = meta.get("tags", [])
+        if tag not in tags:
+            tags.append(tag)
+        meta["tags"] = tags
+        metadata_json = json.dumps(meta, ensure_ascii=False)
+        with self._connection() as conn:
+            conn.execute(
+                "UPDATE documents SET metadata_json = ? WHERE id = ?",
+                (metadata_json, doc_id),
+            )
+            conn.commit()
+        return True
+
+    def get_all_tags(self) -> list[str]:
+        """获取所有文档中使用的标签列表.
+
+        Returns:
+            去重后的标签列表.
+        """
+        all_docs = self.list_documents()
+        tag_set: set[str] = set()
+        for doc in all_docs:
+            meta = doc.get("metadata", {})
+            tags = meta.get("tags", [])
+            tag_set.update(tags)
+        return sorted(tag_set)
+
     def rollback_document(self, doc_id: str) -> dict[str, Any] | None:
         """回滚到指定版本（标记为当前激活版本，保留版本链）.
 

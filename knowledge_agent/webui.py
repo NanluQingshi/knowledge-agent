@@ -342,6 +342,54 @@ def _render_graph() -> str:
     return tmp.name
 
 
+def _export_knowledge_base(fmt: str) -> str:
+    """导出知识库."""
+    import tempfile
+    from knowledge_agent.exporter import Exporter
+
+    try:
+        exporter = Exporter()
+        if fmt == "markdown":
+            out_dir = Path(tempfile.mkdtemp(prefix="kb_export_"))
+            path = exporter.export_markdown(out_dir)
+            return f"✅ 已导出为 Markdown: {path}\n共 {len(list(path.glob('*.md')))} 个文件"
+        else:
+            tmp = Path(tempfile.mktemp(suffix=".json", prefix="kb_export_"))
+            path = exporter.export_json(tmp)
+            return f"✅ 已导出为 JSON: {path}"
+    except Exception as exc:
+        return f"❌ 导出失败: {exc}"
+
+
+def _search_docs(keyword: str) -> str:
+    """搜索文档."""
+    from knowledge_agent.storage.doc_store import DocStore
+    if not keyword or not keyword.strip():
+        return "请输入搜索关键词。"
+    docs = DocStore().search_documents(keyword.strip())
+    if not docs:
+        return "未找到匹配的文档。"
+    lines = [f"### 搜索结果 ({len(docs)} 条)\n"]
+    for doc in docs[:30]:
+        lines.append(f"- **{doc['filename']}** (v{doc.get('version',1)}) — {doc['ingested_at'][:10]}")
+        meta = doc.get("metadata", {})
+        tags = meta.get("tags", [])
+        if tags:
+            lines.append(f"  标签: {', '.join(tags)}")
+    return "\n".join(lines)
+
+
+def _add_tag_to_doc(doc_id: str, tag: str) -> str:
+    """为文档添加标签."""
+    if not doc_id or not tag:
+        return "请输入文档 ID 和标签。"
+    from knowledge_agent.storage.doc_store import DocStore
+    success = DocStore().add_tag(doc_id.strip(), tag.strip())
+    if success:
+        return f"✅ 已为文档 {doc_id[:8]}... 添加标签: {tag}"
+    return f"❌ 未找到文档: {doc_id}"
+
+
 def _cache_stats() -> str:
     """查询缓存统计."""
     try:
@@ -475,6 +523,31 @@ def create_ui() -> gr.Blocks:
                         inputs=[gr.State("Anthropic"), anth_key, gr.State("")],
                         outputs=anth_out,
                     )
+
+        with gr.Tab("📤 导出"):
+            gr.Markdown("### 导出知识库\n将知识库导出为 Markdown 或 JSON 格式。")
+            with gr.Row():
+                md_btn = gr.Button("📝 导出为 Markdown", variant="primary", scale=1)
+                json_btn = gr.Button("💾 导出为 JSON", variant="primary", scale=1)
+            export_output = gr.Markdown()
+            md_btn.click(fn=lambda: _export_knowledge_base("markdown"), outputs=export_output)
+            json_btn.click(fn=lambda: _export_knowledge_base("json"), outputs=export_output)
+
+        with gr.Tab("🏷️ 标签管理"):
+            gr.Markdown("### 搜索与标签\n搜索文档、添加标签。")
+            with gr.Row():
+                search_input = gr.Textbox(label="搜索关键词", placeholder="输入文件名或来源...", scale=3)
+                search_btn = gr.Button("🔍 搜索", variant="primary", scale=1)
+            search_output = gr.Markdown()
+            search_btn.click(fn=_search_docs, inputs=search_input, outputs=search_output)
+
+            gr.Markdown("---\n### 添加标签")
+            with gr.Row():
+                tag_doc_input = gr.Textbox(label="文档 ID", placeholder="输入文档 ID...", scale=2)
+                tag_name_input = gr.Textbox(label="标签名称", placeholder="例如: important, ai, review...", scale=2)
+                tag_btn = gr.Button("添加标签", variant="secondary", scale=1)
+            tag_output = gr.Markdown()
+            tag_btn.click(fn=_add_tag_to_doc, inputs=[tag_doc_input, tag_name_input], outputs=tag_output)
 
         with gr.Tab("📚 文档列表"):
             refresh_btn = gr.Button("🔄 刷新", variant="secondary")
