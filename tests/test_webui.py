@@ -36,3 +36,35 @@ class TestWebUI:
         assert "请输入 URL" in result
         result = _ingest_url("   ")
         assert "请输入 URL" in result
+
+
+class TestWebUINewFeatures:
+    """Tests for newly added Web UI features."""
+
+    def test_cache_stats_imports(self):
+        from knowledge_agent.webui import _cache_stats
+        assert callable(_cache_stats)
+
+    def test_export_functions_import(self):
+        from knowledge_agent.webui import _export_knowledge_base
+        assert callable(_export_knowledge_base)
+
+    def test_search_docs_import(self):
+        from knowledge_agent.webui import _search_docs
+        assert callable(_search_docs)
+
+    def test_add_tag_import(self):
+        from knowledge_agent.webui import _add_tag_to_doc
+        assert callable(_add_tag_to_doc)
+
+    def test_search_docs_empty(self):
+        from knowledge_agent.webui import _search_docs
+        result = _search_docs("")
+        assert "请输入搜索关键词" in result
+
+    def test_add_tag_empty(self):
+        from knowledge_agent.webui import _add_tag_to_doc
+        result = _add_tag_to_doc("", "")
+        assert "请输入" in result
+        result = _add_tag_to_doc("doc123", "")
+        assert "请输入" in result
