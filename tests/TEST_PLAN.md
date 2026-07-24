@@ -28,8 +28,8 @@
 
 ### TC-04: `enhancer.py` 更多用例
 - [x] `MultiQueryFusion` 去重、RRF 评分、top_k
-- [ ] `QueryRewriter` API 失败时优雅降级
-- [ ] `HyDEGenerator` API 失败时返回原问题
+- [x] `QueryRewriter` API 失败时优雅降级
+- [x] `HyDEGenerator` API 失败时返回原问题
 
 ---
 
