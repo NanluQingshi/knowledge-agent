@@ -266,3 +266,43 @@ class TestMultiQueryFusion:
         # Without API key, should at least contain the original question
         assert len(queries) >= 1
         assert "hello world" in queries
+
+
+# ===================================================================
+# QueryRewriter & HyDEGenerator (edge cases)
+# ===================================================================
+
+class TestQueryRewriter:
+    """Tests for QueryRewriter edge cases."""
+
+    def test_empty_question(self):
+        from knowledge_agent.retrieval.enhancer import QueryRewriter
+        rewriter = QueryRewriter()
+        assert rewriter.rewrite("") == []
+        assert rewriter.rewrite("   ") == []
+
+    def test_no_api_key_regression(self):
+        """Without API key, rewrite should not crash."""
+        from knowledge_agent.retrieval.enhancer import QueryRewriter
+        rewriter = QueryRewriter()
+        # Should handle API error gracefully and return at least original question
+        result = rewriter.rewrite("hello world", num_variations=2)
+        assert len(result) >= 1
+
+
+class TestHyDEGenerator:
+    """Tests for HyDEGenerator edge cases."""
+
+    def test_empty_question(self):
+        from knowledge_agent.retrieval.enhancer import HyDEGenerator
+        hyde = HyDEGenerator()
+        assert hyde.generate("") == ""
+        assert hyde.generate("   ") == ""
+
+    def test_no_api_key_fallback(self):
+        """Without API key, should return original question."""
+        from knowledge_agent.retrieval.enhancer import HyDEGenerator
+        hyde = HyDEGenerator()
+        result = hyde.generate("What is AI?")
+        # Should return original question or something non-empty
+        assert result
