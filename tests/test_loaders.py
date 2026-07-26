@@ -513,3 +513,27 @@ class TestUrlLoader:
             pass  # if httpx is installed but network fails, that's also OK
         except Exception:
             pytest.fail("Unexpected exception")
+
+
+# ===================================================================
+# ImageLoader
+# ===================================================================
+
+class TestImageLoader:
+    """Tests for ImageLoader (requires Pillow)."""
+
+    def test_can_handle(self):
+        from knowledge_agent.loaders.image_loader import ImageLoader
+        from pathlib import Path
+        loader = ImageLoader()
+        assert loader.can_handle(Path("test.jpg"))
+        assert loader.can_handle(Path("test.png"))
+        assert loader.can_handle(Path("test.webp"))
+        assert not loader.can_handle(Path("test.txt"))
+
+    def test_load_nonexistent_file_raises(self):
+        from knowledge_agent.loaders.image_loader import ImageLoader
+        from pathlib import Path
+        loader = ImageLoader()
+        with pytest.raises(FileNotFoundError):
+            loader.load(Path("/nonexistent/image.jpg"))

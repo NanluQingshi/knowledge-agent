@@ -325,3 +325,95 @@ class TestOrchestrator:
             mock_store.assert_called_once()
             args, kwargs = mock_store.call_args
             assert kwargs["memory_type"] == "action"
+
+
+# ===================================================================
+# TC-05: 端到端集成测试（mock LLM 和存储）
+# ===================================================================
+
+class TestEndToEnd:
+    """End-to-end integration tests with mocked dependencies."""
+
+    def test_query_returns_result_structure(self):
+        """Orchestrator.run_query returns expected keys."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        result = orchestrator.run_query("test question", top_k=2)
+        assert isinstance(result, dict)
+        assert "answer" in result
+        assert "sources" in result
+        assert isinstance(result["sources"], list)
+
+    def test_query_stream_generates_chunks(self):
+        """Orchestrator.run_query_stream yields text chunks."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        chunks = list(orchestrator.run_query_stream("test", top_k=2))
+        assert len(chunks) > 0
+        assert all(isinstance(c, str) for c in chunks)
+
+    def test_query_with_chat_history(self):
+        """Orchestrator.run_query accepts chat_history."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        history = [{"role": "user", "content": "previous question"}]
+        result = orchestrator.run_query("follow up", top_k=2, chat_history=history)
+        assert "answer" in result
+
+    def test_query_with_graphrag_flag(self):
+        """Orchestrator.run_query accepts use_graphrag flag."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        result = orchestrator.run_query("test", top_k=2, use_graphrag=True)
+        assert "answer" in result
+
+    def test_query_with_enhanced_search(self):
+        """Orchestrator.run_query accepts use_enhanced_search flag."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        result = orchestrator.run_query("test", top_k=2, use_enhanced_search=True)
+        assert "answer" in result
+
+    def test_cache_hit_returns_same_result(self):
+        """Identical queries should return cached result."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        r1 = orchestrator.run_query("cache test", top_k=2)
+        r2 = orchestrator.run_query("cache test", top_k=2)
+        # Cache should return the same answer (may differ due to streaming)
+        assert r1["answer"] == r2["answer"]
+
+    def test_full_pipeline_returns_result(self):
+        """run_full_pipeline returns WorkflowResult even on empty path."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        import tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            orchestrator = Orchestrator()
+            result = orchestrator.run_full_pipeline(tmp, enable_extraction=False, enable_quality_check=False)
+            assert result.success is False  # empty dir → no files
+            assert hasattr(result, "summary")
+
+    def test_system_report_returns_stats(self):
+        """get_system_report returns storage and graph stats."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        report = orchestrator.get_system_report()
+        assert "storage" in report
+        assert "graph" in report
+        assert "quality" in report
+
+    def test_memory_stats_returns_counts(self):
+        """get_memory_stats returns memory counts."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        stats = orchestrator.get_memory_stats()
+        assert "episodic_count" in stats
+        assert "semantic_facts" in stats
+
+    def test_retrieve_returns_results(self):
+        """Orchestrator.retrieve returns search results."""
+        from knowledge_agent.agents.orchestrator import Orchestrator
+        orchestrator = Orchestrator()
+        results = orchestrator.retrieve("test query", top_k=2)
+        assert isinstance(results, list)

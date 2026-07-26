@@ -216,3 +216,93 @@ class TestHybridRetriever:
             assert "metadata" in r
             assert "score" in r
             assert "sources" in r
+
+
+# ===================================================================
+# MultiQueryFusion
+# ===================================================================
+
+class TestMultiQueryFusion:
+    """Tests for multi-query fusion."""
+
+    def test_fuse_results_empty(self):
+        from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+        result = MultiQueryFusion.fuse_results([], top_k=5)
+        assert result == []
+
+    def test_fuse_results_single_list(self):
+        from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+        results = [
+            [{"id": "a", "text": "doc a"}, {"id": "b", "text": "doc b"}],
+        ]
+        fused = MultiQueryFusion.fuse_results(results, top_k=5)
+        assert len(fused) == 2
+        assert fused[0]["id"] == "a"
+
+    def test_fuse_results_deduplicates(self):
+        from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+        results = [
+            [{"id": "a", "text": "doc a"}, {"id": "b", "text": "doc b"}],
+            [{"id": "a", "text": "doc a again"}, {"id": "c", "text": "doc c"}],
+        ]
+        fused = MultiQueryFusion.fuse_results(results, top_k=5)
+        ids = {r["id"] for r in fused}
+        assert ids == {"a", "b", "c"}
+        # 'a' appears in both lists, should get higher RRF score
+        assert fused[0]["id"] == "a"
+
+    def test_fuse_results_respects_top_k(self):
+        from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+        results = [
+            [{"id": str(i), "text": f"doc {i}"} for i in range(10)],
+        ]
+        fused = MultiQueryFusion.fuse_results(results, top_k=3)
+        assert len(fused) == 3
+
+    def test_expand_queries_returns_original_when_no_llm(self):
+        from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+        fusion = MultiQueryFusion()
+        queries = fusion.expand_queries("hello world")
+        # Without API key, should at least contain the original question
+        assert len(queries) >= 1
+        assert "hello world" in queries
+
+
+# ===================================================================
+# QueryRewriter & HyDEGenerator (edge cases)
+# ===================================================================
+
+class TestQueryRewriter:
+    """Tests for QueryRewriter edge cases."""
+
+    def test_empty_question(self):
+        from knowledge_agent.retrieval.enhancer import QueryRewriter
+        rewriter = QueryRewriter()
+        assert rewriter.rewrite("") == []
+        assert rewriter.rewrite("   ") == []
+
+    def test_no_api_key_regression(self):
+        """Without API key, rewrite should not crash."""
+        from knowledge_agent.retrieval.enhancer import QueryRewriter
+        rewriter = QueryRewriter()
+        # Should handle API error gracefully and return at least original question
+        result = rewriter.rewrite("hello world", num_variations=2)
+        assert len(result) >= 1
+
+
+class TestHyDEGenerator:
+    """Tests for HyDEGenerator edge cases."""
+
+    def test_empty_question(self):
+        from knowledge_agent.retrieval.enhancer import HyDEGenerator
+        hyde = HyDEGenerator()
+        assert hyde.generate("") == ""
+        assert hyde.generate("   ") == ""
+
+    def test_no_api_key_fallback(self):
+        """Without API key, should return original question."""
+        from knowledge_agent.retrieval.enhancer import HyDEGenerator
+        hyde = HyDEGenerator()
+        result = hyde.generate("What is AI?")
+        # Should return original question or something non-empty
+        assert result
