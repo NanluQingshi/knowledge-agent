@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.git/
+.github/
+.claude/
+*.md
+!README.md
+data/
+tests/
+.DS_Store

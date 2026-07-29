@@ -1,0 +1,30 @@
+version: "3.8"
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - KA_OPENAI_API_KEY=${KA_OPENAI_API_KEY:-}
+      - KA_OPENAI_BASE_URL=${KA_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - KA_LLM_MODEL=${KA_LLM_MODEL:-gpt-4o}
+    command: ka serve
+    restart: unless-stopped
+
+  webui:
+    build: .
+    ports:
+      - "7860:7860"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - KA_OPENAI_API_KEY=${KA_OPENAI_API_KEY:-}
+      - KA_OPENAI_BASE_URL=${KA_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      - KA_LLM_MODEL=${KA_LLM_MODEL:-gpt-4o}
+    command: ka webui
+    restart: unless-stopped
+    depends_on:
+      - api

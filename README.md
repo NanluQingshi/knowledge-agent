@@ -15,6 +15,9 @@ poetry install -E eval
 
 # 全部
 poetry install -E all
+
+# 激活 pre-commit 自动代码检查
+pre-commit install
 ```
 
 ## 配置
@@ -48,6 +51,20 @@ ka serve
 
 # 启动 Gradio Web UI（推荐）
 ka webui
+```
+
+## Docker 部署
+
+```bash
+# 构建并启动（需先配置 API Key）
+export KA_OPENAI_API_KEY="sk-xxx"
+docker compose up -d
+
+# 访问 Web UI: http://localhost:7860
+# 访问 API: http://localhost:8000
+
+# 查看日志
+docker compose logs -f
 ```
 
 ## 功能模块
