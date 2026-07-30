@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 
-from knowledge_agent.loaders.base import Document
 from knowledge_agent.loaders.text_loader import TextLoader
 from knowledge_agent.loaders.markdown_loader import MarkdownLoader
 from knowledge_agent.loaders.pdf_loader import PDFLoader
@@ -17,6 +16,7 @@ from knowledge_agent.loaders.docx_loader import DocxLoader
 # ---------------------------------------------------------------------------
 # Helper: create a minimal valid PDF with text on each page
 # ---------------------------------------------------------------------------
+
 
 def _create_test_pdf(path: Path, texts: list[str]) -> None:
     """Create a minimal valid PDF with one page per *texts* entry.
@@ -47,9 +47,7 @@ def _create_test_pdf(path: Path, texts: list[str]) -> None:
 
     # Obj 2: Pages tree
     kids = " ".join(f"{3 + 2 * i} 0 R" for i in range(n))
-    _next_obj(
-        f"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {n} >>\nendobj\n".encode()
-    )
+    _next_obj(f"2 0 obj\n<< /Type /Pages /Kids [{kids}] /Count {n} >>\nendobj\n".encode())
 
     font_num = 3 + 2 * n
 
@@ -58,9 +56,7 @@ def _create_test_pdf(path: Path, texts: list[str]) -> None:
         cnum = pnum + 1
 
         safe = text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
-        stream_data = (
-            f"BT /F1 12 Tf 100 700 Td ({safe}) Tj ET\n".encode("latin-1")
-        )
+        stream_data = f"BT /F1 12 Tf 100 700 Td ({safe}) Tj ET\n".encode("latin-1")
 
         _next_obj(
             f"{pnum} 0 obj\n"
@@ -76,11 +72,7 @@ def _create_test_pdf(path: Path, texts: list[str]) -> None:
         )
 
     # Font resource
-    font_obj = (
-        f"{font_num} 0 obj\n"
-        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\n"
-        "endobj\n"
-    )
+    font_obj = f"{font_num} 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n"
     _next_obj(font_obj.encode())
 
     # xref table
@@ -94,10 +86,7 @@ def _create_test_pdf(path: Path, texts: list[str]) -> None:
 
     # Trailer
     trailer = (
-        f"trailer\n"
-        f"<< /Size {obj_counter + 1} /Root 1 0 R >>\n"
-        f"startxref\n{xref_offset}\n"
-        "%%EOF\n"
+        f"trailer\n<< /Size {obj_counter + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n"
     )
     buf.write(trailer.encode())
 
@@ -107,6 +96,7 @@ def _create_test_pdf(path: Path, texts: list[str]) -> None:
 # ===================================================================
 # TextLoader
 # ===================================================================
+
 
 class TestTextLoader:
     """Tests for TextLoader."""
@@ -177,6 +167,7 @@ class TestTextLoader:
 # ===================================================================
 # MarkdownLoader
 # ===================================================================
+
 
 class TestMarkdownLoader:
     """Tests for MarkdownLoader."""
@@ -254,6 +245,7 @@ Content of section two.
 # PDFLoader
 # ===================================================================
 
+
 class TestPDFLoader:
     """Tests for PDFLoader."""
 
@@ -320,6 +312,7 @@ class TestPDFLoader:
 # HTMLLoader
 # ===================================================================
 
+
 class TestHTMLLoader:
     """Tests for HTMLLoader."""
 
@@ -373,6 +366,7 @@ class TestHTMLLoader:
 # CSVLoader
 # ===================================================================
 
+
 class TestCSVLoader:
     """Tests for CSVLoader."""
 
@@ -412,6 +406,7 @@ class TestCSVLoader:
 # ===================================================================
 # JSONLoader
 # ===================================================================
+
 
 class TestJSONLoader:
     """Tests for JSONLoader."""
@@ -467,6 +462,7 @@ class TestJSONLoader:
 # DocxLoader
 # ===================================================================
 
+
 class TestDocxLoader:
     """Tests for DocxLoader (requires python-docx)."""
 
@@ -493,17 +489,20 @@ class TestDocxLoader:
 # UrlLoader
 # ===================================================================
 
+
 class TestUrlLoader:
     """Tests for UrlLoader (requires httpx & beautifulsoup4)."""
 
     def test_can_handle(self):
         from knowledge_agent.loaders.url_loader import UrlLoader
+
         loader = UrlLoader()
         assert not loader.can_handle(Path("test.txt"))  # UrlLoader doesn't match by extension
 
     def test_ingest_url_import_error(self):
         """If httpx is not installed, ingest_url should raise ImportError."""
         from knowledge_agent.loaders.url_loader import UrlLoader
+
         loader = UrlLoader()
         try:
             loader.ingest_url("https://example.com")
@@ -519,12 +518,14 @@ class TestUrlLoader:
 # ImageLoader
 # ===================================================================
 
+
 class TestImageLoader:
     """Tests for ImageLoader (requires Pillow)."""
 
     def test_can_handle(self):
         from knowledge_agent.loaders.image_loader import ImageLoader
         from pathlib import Path
+
         loader = ImageLoader()
         assert loader.can_handle(Path("test.jpg"))
         assert loader.can_handle(Path("test.png"))
@@ -534,6 +535,7 @@ class TestImageLoader:
     def test_load_nonexistent_file_raises(self):
         from knowledge_agent.loaders.image_loader import ImageLoader
         from pathlib import Path
+
         loader = ImageLoader()
         with pytest.raises(FileNotFoundError):
             loader.load(Path("/nonexistent/image.jpg"))

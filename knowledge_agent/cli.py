@@ -29,14 +29,42 @@ def cli() -> None:
 
 @cli.command("ingest")
 @click.argument("path", type=click.Path(exists=True, path_type=Path))
+@click.option(
+    "--chunk-size",
+    default=settings.chunk_size,
+    type=click.IntRange(min=1),
+    show_default=True,
+    help="分块大小 (tokens)",
+)
+@click.option(
+    "--chunk-overlap",
+    default=settings.chunk_overlap,
+    type=click.IntRange(min=0),
+    show_default=True,
+    help="分块重叠 (tokens)",
+)
 @click.option("--extract/--no-extract", default=True, help="是否执行知识抽取（实体/关系提取）")
 @click.option("--quality/--no-quality", default=True, help="是否执行质检（过期检测/缺口分析）")
-def ingest(path: Path, extract: bool, quality: bool) -> None:
+def ingest(
+    path: Path,
+    chunk_size: int,
+    chunk_overlap: int,
+    extract: bool,
+    quality: bool,
+) -> None:
     """摄入文档 — 加载、分块、向量化、抽取、存储."""
+    from knowledge_agent.agents.collection_agent import CollectionAgent
     from knowledge_agent.agents.orchestrator import Orchestrator
+    from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 
     console.print(f"[bold]Ingesting from: {path}[/bold]")
-    orchestrator = Orchestrator()
+    chunker = RecursiveChunker(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+    )
+    orchestrator = Orchestrator(
+        collection_agent=CollectionAgent(chunker=chunker),
+    )
     result = orchestrator.run_full_pipeline(
         path,
         enable_extraction=extract,
@@ -44,7 +72,9 @@ def ingest(path: Path, extract: bool, quality: bool) -> None:
     )
 
     ingest_result = result.results.get("ingest", {})
-    console.print(f"  Loaded [green]{ingest_result.get('documents_loaded', 0)}[/green] document sections")
+    console.print(
+        f"  Loaded [green]{ingest_result.get('documents_loaded', 0)}[/green] document sections"
+    )
     console.print(f"  Created [green]{ingest_result.get('chunks_created', 0)}[/green] chunks")
 
     if extract and "extraction" in result.results:
@@ -96,8 +126,12 @@ def query(question: str, top_k: int, graphrag: bool) -> None:
         table.add_column("Content", max_width=80)
         table.add_column("Source", max_width=40)
         for i, src in enumerate(result["sources"], start=1):
-            preview = src["text"][:200].replace("\n", " ") + ("..." if len(src["text"]) > 200 else "")
-            source_name = src.get("metadata", {}).get("source", src.get("metadata", {}).get("filename", "unknown"))
+            preview = src["text"][:200].replace("\n", " ") + (
+                "..." if len(src["text"]) > 200 else ""
+            )
+            source_name = src.get("metadata", {}).get(
+                "source", src.get("metadata", {}).get("filename", "unknown")
+            )
             table.add_row(str(i), preview, source_name)
         console.print(table)
 
@@ -142,8 +176,16 @@ def eval_dataset() -> None:
 @click.option("--expected-answer", default="", help="期望回答")
 @click.option("--category", default="general", help="类别")
 @click.option("--difficulty", default="medium", help="难度 (easy/medium/hard)")
-def eval_dataset_add(query: str, expected_doc_ids: str, expected_answer: str, category: str, difficulty: str) -> None:
+def eval_dataset_add(
+    query: str,
+    expected_doc_ids: str,
+    expected_answer: str,
+    category: str,
+    difficulty: str,
+) -> None:
     """添加一条评估条目."""
+    from knowledge_agent.evaluation import EvaluationDataset
+
     ds = EvaluationDataset()
     doc_ids = [x.strip() for x in expected_doc_ids.split(",") if x.strip()]
     item_id = ds.add_item(
@@ -160,6 +202,8 @@ def eval_dataset_add(query: str, expected_doc_ids: str, expected_answer: str, ca
 @click.option("--category", default=None, help="按类别过滤")
 def eval_dataset_list(category: str | None) -> None:
     """列出评估数据集条目."""
+    from knowledge_agent.evaluation import EvaluationDataset
+
     ds = EvaluationDataset()
     items = ds.list_items(category=category)
     if not items:
@@ -188,6 +232,8 @@ def eval_dataset_list(category: str | None) -> None:
 @eval_dataset.command("clear")
 def eval_dataset_clear() -> None:
     """清空评估数据集."""
+    from knowledge_agent.evaluation import EvaluationDataset
+
     ds = EvaluationDataset()
     ds.clear()
     console.print("[green]Evaluation dataset cleared.[/green]")
@@ -197,9 +243,14 @@ def eval_dataset_clear() -> None:
 @click.argument("output_path", type=str)
 def eval_dataset_export(output_path: str) -> None:
     """导出评估数据集到 JSON 文件."""
+    from knowledge_agent.evaluation import EvaluationDataset
+
     ds = EvaluationDataset()
     ds.export_to(output_path)
     console.print(f"[green]Exported {ds.size} items to {output_path}[/green]")
+
+
+@cli.command("delete")
 @click.argument("doc_id", type=str)
 def delete(doc_id: str) -> None:
     """删除指定文档（从向量库和元数据存储中移除）."""
@@ -250,6 +301,7 @@ def webui_cmd(host: str, port: int, share: bool) -> None:
 def main() -> None:
     """入口函数."""
     from knowledge_agent.monitoring.logger import setup_logging
+
     setup_logging()
     cli()
 

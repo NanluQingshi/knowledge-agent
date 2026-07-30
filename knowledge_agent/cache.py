@@ -82,6 +82,16 @@ class QueryCache:
         return len(self._cache)
 
     @property
+    def ttl(self) -> int:
+        """缓存有效期（秒）."""
+        return self._ttl
+
+    @property
+    def max_size(self) -> int:
+        """缓存最大条目数."""
+        return self._max_size
+
+    @property
     def keys(self) -> list[str]:
         """当前缓存的所有键."""
         return list(self._cache.keys())

@@ -6,7 +6,6 @@ import math
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
-from knowledge_agent.config import settings
 from knowledge_agent.graph.graph_store import GraphStore
 from knowledge_agent.storage.doc_store import DocStore
 
@@ -271,7 +270,11 @@ class QualityAgent:
             if not entity_id or gap.get("current_connections", 0) > 0:
                 # 已经有连接的不处理
                 entry["filled"] = False
-                entry["reason"] = "already_has_connections" if gap.get("current_connections", 0) > 0 else "no_entity_id"
+                entry["reason"] = (
+                    "already_has_connections"
+                    if gap.get("current_connections", 0) > 0
+                    else "no_entity_id"
+                )
                 filled.append(entry)
                 continue
 
@@ -322,13 +325,15 @@ class QualityAgent:
             ename_keywords = set(ename.lower().replace("_", " ").split())
             shared = keywords & ename_keywords
             if shared:
-                connections.append({
-                    "entity_id": eid,
-                    "entity_name": ename,
-                    "shared_keywords": list(shared),
-                    "suggested_relation": "related_to",
-                    "confidence": round(len(shared) / max(len(keywords), 1), 2),
-                })
+                connections.append(
+                    {
+                        "entity_id": eid,
+                        "entity_name": ename,
+                        "shared_keywords": list(shared),
+                        "suggested_relation": "related_to",
+                        "confidence": round(len(shared) / max(len(keywords), 1), 2),
+                    }
+                )
 
         # 按置信度降序排列，取前 5 个
         connections.sort(key=lambda c: c["confidence"], reverse=True)

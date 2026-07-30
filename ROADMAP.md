@@ -12,8 +12,9 @@
 | Phase 1-5 | 原始开发计划（MLP → 完整系统） | `feature/implementation` | ✅ 已合并 |
 | Phase 6 | 修复与优化（CR-01 ~ NF-02） | `feature/phase6-fixes` | ✅ 已合并 |
 | Phase 7 | 功能增强 | 多个分支 | ✅ 已合并 |
-| Phase 8 | 监控与性能 | `feature/monitoring`、`feature/performance` | 🚀 待合并 |
-| 待办 | 下一步方向 | — | 📋 规划中 |
+| Phase 8 | 监控、性能与功能扩展 | 多个分支 | ✅ 已合并 |
+| Phase 9 | 主线稳定性与 CI 质量门禁 | `codex/phase9-quality-gates` | 🟡 实现完成，验收暂缓 |
+| Phase 10-12 | 容器部署、工作流、生产存储 | 见 `specs/` | 📋 规划中 |
 
 ---
 
@@ -95,7 +96,7 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 | 监控面板 | Web UI 📈 监控 Tab | 实时显示操作耗时和请求计数，支持重置 |
 | CLI 集成 | `cli.py` | 启动时初始化结构化日志 |
 
-**分支**: `feature/monitoring` | **Commits**: 1 个 | **状态**: 🚀 待合并到 main
+**分支**: `feature/monitoring` | **Commits**: 1 个 | **状态**: ✅ 已合并到 main
 
 ### 8.2 性能优化与缓存
 
@@ -105,20 +106,47 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 | 并行批量摄入 | `collection_agent.py` | `ingest_path_parallel()` 多线程并发处理 |
 | 缓存统计 | Web UI | 缓存命中条数查询 |
 
-**分支**: `feature/performance` | **Commits**: 1 个 | **状态**: 🚀 待合并到 main
+**分支**: `feature/performance` | **Commits**: 1 个 | **状态**: ✅ 已合并到 main
 
 ---
 
-## 待办事项（规划中）
+## 已完成的后续增强
 
-| 优先级 | 方向 | 说明 |
-|--------|------|------|
-| ⭐ | CI/CD 自动化 | GitHub Actions：ruff check + pytest + 自动发布 |
-| ⭐ | Docker 部署 | Dockerfile + docker-compose，一键启动 |
-| | 搜索增强 | Query Rewriting、HyDE 检索、多查询融合 |
-| | 知识库搜索/浏览 | 全文搜索、标签/分类过滤 |
-| | 知识库导出 | 导出为 Markdown / JSON / CSV |
-| | 多模态支持 | 图片理解、OCR |
+| 方向 | 完成内容 | 状态 |
+|------|----------|------|
+| 搜索增强 | Query Rewriting、HyDE、多查询融合 | ✅ 已完成 |
+| 知识库搜索/浏览 | 文档搜索与标签管理 | ✅ 已完成 |
+| 知识库导出 | Markdown / JSON 导出 | ✅ 已完成 |
+| 多模态支持 | 图片加载与 OCR 能力 | ✅ 已完成 |
+
+---
+
+## Phase 9: 主线稳定性与 CI 质量门禁
+
+本阶段修复 Phase 8 及后续功能合并后的入口回归，并建立远端质量门禁。
+
+| 内容 | 状态 |
+|------|------|
+| API app factory 与评估路由恢复 | ✅ 已实现 |
+| CLI 命令注册和 ingest 参数恢复 | ✅ 已实现 |
+| Orchestrator 监控、缓存能力合并 | ✅ 已实现 |
+| tokenizer 离线降级 | ✅ 已实现 |
+| API/CLI/Web UI/Orchestrator 回归测试 | ✅ 已实现 |
+| GitHub Actions 编译、Ruff、pytest | ✅ 已实现 |
+| Python 3.11/3.12 最终验证 | ⏸️ 按要求暂缓 |
+
+详细范围和进度见
+[`specs/phase-09-quality-gates/`](specs/phase-09-quality-gates/)。
+
+---
+
+## 后续规划
+
+| Phase | 方向 | Spec |
+|------|------|------|
+| Phase 10 | Docker 与本地部署 | [`specs/phase-10-container-deployment/`](specs/phase-10-container-deployment/) |
+| Phase 11 | 可恢复的工作流编排 | [`specs/phase-11-workflow-orchestration/`](specs/phase-11-workflow-orchestration/) |
+| Phase 12 | 生产级存储适配 | [`specs/phase-12-production-storage/`](specs/phase-12-production-storage/) |
 
 ---
 
@@ -132,5 +160,6 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 | `feature/chat-history` | 对话历史 | 5 | ✅ 已合并 |
 | `feature/web-ui` | Web UI | 1 | ✅ 已合并 |
 | `feature/polish` | 打磨完善 | 10 | ✅ 已合并 |
-| `feature/monitoring` | 监控与可观测性 | 1 | 🚀 待合并 |
-| `feature/performance` | 性能优化与缓存 | 1 | 🚀 待合并 |
+| `feature/monitoring` | 监控与可观测性 | 1 | ✅ 已合并 |
+| `feature/performance` | 性能优化与缓存 | 1 | ✅ 已合并 |
+| `codex/phase9-quality-gates` | 主线稳定性与 CI | 当前开发 | 🟡 实现完成 |

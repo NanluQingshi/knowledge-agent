@@ -1,6 +1,6 @@
 """Tests for retrieval: BM25Retriever and HybridRetriever."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,6 +11,7 @@ from knowledge_agent.retrieval.hybrid_retriever import HybridRetriever
 # ===================================================================
 # BM25Retriever
 # ===================================================================
+
 
 class TestBM25Retriever:
     """Tests for BM25-based sparse retriever."""
@@ -108,6 +109,7 @@ class TestBM25Retriever:
 # HybridRetriever
 # ===================================================================
 
+
 class TestHybridRetriever:
     """Tests for HybridRetriever with mocked sub-retrievers."""
 
@@ -200,7 +202,9 @@ class TestHybridRetriever:
 
     def test_rrf_scoring_math(self, mock_vector_retriever, mock_bm25_retriever):
         """Verify RRF scoring: doc in both retrievers should have higher score."""
-        hybrid = HybridRetriever(vector_retriever=mock_vector_retriever, bm25_retriever=mock_bm25_retriever)
+        hybrid = HybridRetriever(
+            vector_retriever=mock_vector_retriever, bm25_retriever=mock_bm25_retriever
+        )
         results = hybrid.retrieve("query", top_k=10)
         # Doc B is present in both (rank_v=2, rank_b=1), so should have highest RRF score
         doc_b = next(r for r in results if r["id"] == "B")
@@ -222,16 +226,19 @@ class TestHybridRetriever:
 # MultiQueryFusion
 # ===================================================================
 
+
 class TestMultiQueryFusion:
     """Tests for multi-query fusion."""
 
     def test_fuse_results_empty(self):
         from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+
         result = MultiQueryFusion.fuse_results([], top_k=5)
         assert result == []
 
     def test_fuse_results_single_list(self):
         from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+
         results = [
             [{"id": "a", "text": "doc a"}, {"id": "b", "text": "doc b"}],
         ]
@@ -241,6 +248,7 @@ class TestMultiQueryFusion:
 
     def test_fuse_results_deduplicates(self):
         from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+
         results = [
             [{"id": "a", "text": "doc a"}, {"id": "b", "text": "doc b"}],
             [{"id": "a", "text": "doc a again"}, {"id": "c", "text": "doc c"}],
@@ -253,6 +261,7 @@ class TestMultiQueryFusion:
 
     def test_fuse_results_respects_top_k(self):
         from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+
         results = [
             [{"id": str(i), "text": f"doc {i}"} for i in range(10)],
         ]
@@ -261,6 +270,7 @@ class TestMultiQueryFusion:
 
     def test_expand_queries_returns_original_when_no_llm(self):
         from knowledge_agent.retrieval.enhancer import MultiQueryFusion
+
         fusion = MultiQueryFusion()
         queries = fusion.expand_queries("hello world")
         # Without API key, should at least contain the original question
@@ -272,11 +282,13 @@ class TestMultiQueryFusion:
 # QueryRewriter & HyDEGenerator (edge cases)
 # ===================================================================
 
+
 class TestQueryRewriter:
     """Tests for QueryRewriter edge cases."""
 
     def test_empty_question(self):
         from knowledge_agent.retrieval.enhancer import QueryRewriter
+
         rewriter = QueryRewriter()
         assert rewriter.rewrite("") == []
         assert rewriter.rewrite("   ") == []
@@ -284,6 +296,7 @@ class TestQueryRewriter:
     def test_no_api_key_regression(self):
         """Without API key, rewrite should not crash."""
         from knowledge_agent.retrieval.enhancer import QueryRewriter
+
         rewriter = QueryRewriter()
         # Should handle API error gracefully and return at least original question
         result = rewriter.rewrite("hello world", num_variations=2)
@@ -295,6 +308,7 @@ class TestHyDEGenerator:
 
     def test_empty_question(self):
         from knowledge_agent.retrieval.enhancer import HyDEGenerator
+
         hyde = HyDEGenerator()
         assert hyde.generate("") == ""
         assert hyde.generate("   ") == ""
@@ -302,6 +316,7 @@ class TestHyDEGenerator:
     def test_no_api_key_fallback(self):
         """Without API key, should return original question."""
         from knowledge_agent.retrieval.enhancer import HyDEGenerator
+
         hyde = HyDEGenerator()
         result = hyde.generate("What is AI?")
         # Should return original question or something non-empty

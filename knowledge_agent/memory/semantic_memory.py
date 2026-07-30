@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from knowledge_agent.config import settings
 from knowledge_agent.graph.graph_store import GraphStore
 
 

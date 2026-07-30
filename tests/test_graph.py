@@ -1,8 +1,7 @@
 """Tests for knowledge graph: GraphStore and CommunityDetector."""
 
-import json
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -13,6 +12,7 @@ from knowledge_agent.graph.community_detector import CommunityDetector
 # ===================================================================
 # GraphStore
 # ===================================================================
+
 
 class TestGraphStore:
     """Tests for NetworkX-backed GraphStore."""
@@ -184,6 +184,7 @@ class TestGraphStore:
 
     def test_graph_property(self, graph_store):
         import networkx as nx
+
         assert isinstance(graph_store.graph, nx.DiGraph)
         graph_store.add_entity("e1", "Test", "type")
         assert "e1" in graph_store.graph
@@ -192,6 +193,7 @@ class TestGraphStore:
 # ===================================================================
 # CommunityDetector
 # ===================================================================
+
 
 class TestCommunityDetector:
     """Tests for Louvain-based CommunityDetector."""
@@ -215,7 +217,11 @@ class TestCommunityDetector:
     def test_detect_returns_communities(self, mock_louvain, graph_store):
         # Mock Louvain partition: two communities
         mock_louvain.best_partition.return_value = {
-            "a": 0, "b": 0, "c": 0, "d": 1, "e": 1,
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 1,
+            "e": 1,
         }
 
         detector = CommunityDetector()
@@ -253,7 +259,11 @@ class TestCommunityDetector:
     @patch("knowledge_agent.graph.community_detector.community_louvain")
     def test_get_hierarchy(self, mock_louvain, graph_store):
         mock_louvain.best_partition.return_value = {
-            "a": 0, "b": 0, "c": 0, "d": 1, "e": 1,
+            "a": 0,
+            "b": 0,
+            "c": 0,
+            "d": 1,
+            "e": 1,
         }
 
         detector = CommunityDetector()

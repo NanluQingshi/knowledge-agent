@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
 
 from knowledge_agent.loaders.base import BaseLoader, Document
 
@@ -112,7 +111,10 @@ class ImageLoader(BaseLoader):
                     {
                         "role": "user",
                         "content": [
-                            {"type": "text", "text": "请详细描述这张图片的内容，包括文字、物体、场景等。"},
+                            {
+                                "type": "text",
+                                "text": "请详细描述这张图片的内容，包括文字、物体、场景等。",
+                            },
                             {
                                 "type": "image_url",
                                 "image_url": {

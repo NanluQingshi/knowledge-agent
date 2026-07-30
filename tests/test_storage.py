@@ -1,6 +1,5 @@
 """Tests for storage layer: DocStore (SQLite) and VectorStore (ChromaDB mock)."""
 
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -13,6 +12,7 @@ from knowledge_agent.storage.vector_store import VectorStore
 # ===================================================================
 # DocStore
 # ===================================================================
+
 
 class TestDocStore:
     """Tests for SQLite-backed DocStore."""
@@ -124,6 +124,7 @@ class TestDocStore:
 # VectorStore
 # ===================================================================
 
+
 class TestVectorStore:
     """Tests for ChromaDB-backed VectorStore with mocked client."""
 
@@ -139,8 +140,10 @@ class TestVectorStore:
 
     @pytest.fixture
     def vector_store(self, mock_client, mock_collection):
-        with patch("knowledge_agent.storage.vector_store.chromadb.PersistentClient",
-                   return_value=mock_client):
+        with patch(
+            "knowledge_agent.storage.vector_store.chromadb.PersistentClient",
+            return_value=mock_client,
+        ):
             store = VectorStore(persist_dir="/tmp/fake_chroma")
             return store
 

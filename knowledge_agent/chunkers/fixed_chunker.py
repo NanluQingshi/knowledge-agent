@@ -1,8 +1,6 @@
 """Fixed-size chunking strategy — split text by token count."""
 
-import tiktoken
-
-from knowledge_agent.chunkers.base import BaseChunker, Chunk
+from knowledge_agent.chunkers.base import BaseChunker, Chunk, get_token_encoding
 
 
 class FixedChunker(BaseChunker):
@@ -17,7 +15,7 @@ class FixedChunker(BaseChunker):
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 50) -> None:
         self.chunk_size = chunk_size
         self.chunk_overlap = min(chunk_overlap, chunk_size // 2)
-        self._encoding = tiktoken.get_encoding("cl100k_base")
+        self._encoding = get_token_encoding()
 
     def chunk(self, text: str, metadata: dict | None = None) -> list[Chunk]:
         """Split *text* into fixed-size token windows."""

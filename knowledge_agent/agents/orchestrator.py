@@ -11,19 +11,20 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from knowledge_agent.agents.collection_agent import CollectionAgent
 from knowledge_agent.agents.extraction_agent import ExtractionAgent
 from knowledge_agent.agents.qa_agent import QAAgent
 from knowledge_agent.agents.quality_agent import QualityAgent
 from knowledge_agent.retrieval.bm25_retriever import BM25Retriever
-from knowledge_agent.retrieval.graphrag_retriever import GraphRAGRetriever
 from knowledge_agent.retrieval.hybrid_retriever import HybridRetriever
 from knowledge_agent.retrieval.vector_retriever import VectorRetriever
 
 from knowledge_agent.memory.episodic_memory import EpisodicMemory
 from knowledge_agent.memory.semantic_memory import SemanticMemory
+from knowledge_agent.monitoring.metrics import MetricsCollector
+from knowledge_agent.monitoring.tracer import Tracer
 
 
 class WorkflowStep(str, Enum):
@@ -87,7 +88,10 @@ class Orchestrator:
 
         # 查询结果缓存
         from knowledge_agent.cache import QueryCache
+
         self._query_cache = QueryCache(ttl=300, max_size=100)
+        self._metrics = MetricsCollector()
+        self._tracer = Tracer()
 
     # ------------------------------------------------------------------
     # 全流程管道
@@ -228,36 +232,49 @@ class Orchestrator:
             QAAgent.query() 返回的结果字典.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
+        self._tracer.start()
+        self._metrics.increment("query.count")
 
         # 检查缓存（无历史时才使用缓存）
         cache_key = f"query:{question}:{top_k}:{use_graphrag}:{use_enhanced_search}"
         if not chat_history:
             cached = self._query_cache.get(cache_key)
             if cached is not None:
+                self._metrics.increment("query.cache_hit")
                 return cached
+            self._metrics.increment("query.cache_miss")
 
-        # 搜索增强：查询改写 + HyDE + 多查询融合
-        if use_enhanced_search:
-            question = self._enhance_query(question, top_k)
-
-        result = qa.query(question, top_k=top_k, chat_history=chat_history)
-
-        # 缓存结果（无历史时）
-        if not chat_history:
-            self._query_cache.set(cache_key, result)
-
-        # 将问答记录存入情景记忆
         try:
-            self._episodic_memory.store_conversation(
-                user_message=question,
-                assistant_response=result.get("answer", ""),
-                metadata={
-                    "top_k": top_k,
-                    "use_graphrag": use_graphrag,
-                },
-            )
+            with self._metrics.timeit("query"):
+                # 搜索增强：查询改写 + HyDE + 多查询融合
+                if use_enhanced_search:
+                    question = self._enhance_query(question, top_k)
+
+                result = qa.query(
+                    question,
+                    top_k=top_k,
+                    chat_history=chat_history,
+                )
+
+            # 缓存结果（无历史时）
+            if not chat_history:
+                self._query_cache.set(cache_key, result)
+
+            # 将问答记录存入情景记忆
+            try:
+                self._episodic_memory.store_conversation(
+                    user_message=question,
+                    assistant_response=result.get("answer", ""),
+                    metadata={
+                        "top_k": top_k,
+                        "use_graphrag": use_graphrag,
+                    },
+                )
+            except Exception:
+                pass
         except Exception:
-            pass
+            self._metrics.increment("query.error")
+            raise
 
         return result
 
@@ -282,6 +299,8 @@ class Orchestrator:
             LLM 文本片段.
         """
         qa = self._get_qa_agent(use_graphrag=use_graphrag)
+        self._tracer.start()
+        self._metrics.increment("query_stream.count")
 
         # 搜索增强
         enhanced_question = question
@@ -290,9 +309,18 @@ class Orchestrator:
 
         # 收集流式输出并存入记忆
         full_answer = ""
-        for chunk in qa.stream_query(enhanced_question, top_k=top_k, chat_history=chat_history):
-            full_answer += chunk
-            yield chunk
+        try:
+            with self._metrics.timeit("query_stream"):
+                for chunk in qa.stream_query(
+                    enhanced_question,
+                    top_k=top_k,
+                    chat_history=chat_history,
+                ):
+                    full_answer += chunk
+                    yield chunk
+        except Exception:
+            self._metrics.increment("query_stream.error")
+            raise
 
         # 流结束后存入情景记忆
         if full_answer:
@@ -445,11 +473,15 @@ class Orchestrator:
             "expired_documents": len(self._quality.check_expired_documents()),
             "knowledge_gaps": len(self._quality.detect_knowledge_gaps()),
             "freshness_distribution": {
-                "high (>0.7)": sum(1 for d in docs_with_freshness if d.get("freshness_score", 0) > 0.7),
+                "high (>0.7)": sum(
+                    1 for d in docs_with_freshness if d.get("freshness_score", 0) > 0.7
+                ),
                 "medium (0.3-0.7)": sum(
                     1 for d in docs_with_freshness if 0.3 <= d.get("freshness_score", 0) <= 0.7
                 ),
-                "low (<0.3)": sum(1 for d in docs_with_freshness if d.get("freshness_score", 0) < 0.3),
+                "low (<0.3)": sum(
+                    1 for d in docs_with_freshness if d.get("freshness_score", 0) < 0.3
+                ),
             },
         }
 
@@ -466,8 +498,7 @@ class Orchestrator:
 
         return {
             "stale_documents": [
-                {"filename": d.get("filename", ""), "age_days": d.get("age_days", 0)}
-                for d in stale
+                {"filename": d.get("filename", ""), "age_days": d.get("age_days", 0)} for d in stale
             ],
             "knowledge_gaps": [
                 {"entity": g.get("entity_name", ""), "connections": g.get("current_connections", 0)}
@@ -594,6 +625,27 @@ class Orchestrator:
         return self._collection._doc_store.rollback_document(doc_id)
 
     # ------------------------------------------------------------------
+    # 监控与缓存
+    # ------------------------------------------------------------------
+
+    @property
+    def metrics(self) -> MetricsCollector:
+        """监控指标收集器."""
+        return self._metrics
+
+    def get_monitoring_report(self) -> dict[str, Any]:
+        """获取耗时和计数器监控报告."""
+        return self._metrics.get_report()
+
+    def get_cache_stats(self) -> dict[str, Any]:
+        """获取当前查询缓存状态."""
+        return {
+            "size": self._query_cache.size,
+            "ttl": self._query_cache.ttl,
+            "max_size": self._query_cache.max_size,
+        }
+
+    # ------------------------------------------------------------------
     # 搜索增强
     # ------------------------------------------------------------------
 
@@ -612,9 +664,9 @@ class Orchestrator:
         """
         try:
             from knowledge_agent.retrieval.enhancer import MultiQueryFusion
-            from knowledge_agent.storage.vector_store import VectorStore
             from knowledge_agent.embeddings.embedder import Embedder
             from knowledge_agent.retrieval.vector_retriever import VectorRetriever
+            from knowledge_agent.storage.vector_store import VectorStore
 
             fusion = MultiQueryFusion()
             expanded = fusion.expand_queries(question)
@@ -644,9 +696,7 @@ class Orchestrator:
                 return question
 
             # 将融合结果摘要追加到原始查询
-            context_summary = "\n".join(
-                f"- {r.get('text', '')[:200]}" for r in fused[:3]
-            )
+            context_summary = "\n".join(f"- {r.get('text', '')[:200]}" for r in fused[:3])
             return f"{question}\n\nRelevant context:\n{context_summary}"
         except Exception:
             return question
@@ -661,8 +711,6 @@ class Orchestrator:
             return self._qa_agent
 
         from knowledge_agent.embeddings.embedder import Embedder
-        from knowledge_agent.graph.community_detector import CommunityDetector
-        from knowledge_agent.graph.graph_retriever import GraphRetriever
         from knowledge_agent.storage.vector_store import VectorStore
 
         vector_store = VectorStore()
@@ -685,6 +733,7 @@ class Orchestrator:
         reranker = None
         try:
             from knowledge_agent.retrieval.reranker import CrossEncoderReranker
+
             reranker = CrossEncoderReranker()
         except Exception:
             pass
@@ -700,7 +749,7 @@ class Orchestrator:
         return qa
 
     def _update_bm25_index(self) -> None:
-        """刷新 BM25 索引（增量更新，懒加载）. """
+        """刷新 BM25 索引（增量更新，懒加载）."""
         try:
             from knowledge_agent.storage.vector_store import VectorStore
 

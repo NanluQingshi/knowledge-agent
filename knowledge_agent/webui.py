@@ -101,6 +101,7 @@ def _ingest_url(url: str, progress: gr.Progress = gr.Progress()) -> str:
                 continue
 
             import uuid
+
             chunk_ids = [uuid.uuid4().hex for _ in chunks]
             chunk_texts = [c.text for c in chunks]
             embeddings = orchestrator._collection._embedder.embed(chunk_texts)
@@ -129,7 +130,9 @@ def _ingest_url(url: str, progress: gr.Progress = gr.Progress()) -> str:
         return f"❌ {exc}"
 
 
-def _answer_question(message: str, history: list[dict[str, str]], use_enhanced: bool = False) -> str:
+def _answer_question(
+    message: str, history: list[dict[str, str]], use_enhanced: bool = False
+) -> str:
     """RAG 问答（流式），支持多轮对话历史和跨会话记忆检索."""
     if not message or not message.strip():
         return "请输入问题。"
@@ -141,8 +144,7 @@ def _answer_question(message: str, history: list[dict[str, str]], use_enhanced: 
     enriched_history = list(history)
     if relevant_memories:
         memory_context = "\n".join(
-            f"[Past Q&A: {m.get('text', '')[:200]}]"
-            for m in relevant_memories
+            f"[Past Q&A: {m.get('text', '')[:200]}]" for m in relevant_memories
         )
         # 添加一条系统级的记忆提示
         enriched_history.insert(
@@ -150,8 +152,7 @@ def _answer_question(message: str, history: list[dict[str, str]], use_enhanced: 
             {
                 "role": "system",
                 "content": (
-                    "以下是从历史对话中检索到的相关记忆，可能对回答有帮助：\n"
-                    f"{memory_context}"
+                    f"以下是从历史对话中检索到的相关记忆，可能对回答有帮助：\n{memory_context}"
                 ),
             },
         )
@@ -182,6 +183,7 @@ def _list_documents() -> str:
 
     # 获取具体文档列表
     from knowledge_agent.storage.doc_store import DocStore
+
     docs = DocStore().list_documents()
     if docs:
         lines.append("")
@@ -218,8 +220,7 @@ def _get_document_versions(doc_id: str) -> str:
         tag = " ⬅️ 当前" if v == versions[0] else ""
         tag += " 🔙 已回滚" if rolled_back else ""
         lines.append(
-            f"- v{v_num} | ID: {v_id} | {v['ingested_at'][:10]} | "
-            f"{v['chunk_count']} chunks{tag}"
+            f"- v{v_num} | ID: {v_id} | {v['ingested_at'][:10]} | {v['chunk_count']} chunks{tag}"
         )
     return "\n".join(lines)
 
@@ -261,7 +262,7 @@ def _system_health() -> str:
         "## 📊 健康状态\n",
         f"**过期文档**: {quality.get('expired_documents', 0)}",
         f"**知识缺口**: {quality.get('knowledge_gaps', 0)}",
-        f"**新鲜度分布**:",
+        "**新鲜度分布**:",
         f"  - 高 (>0.7): {freshness_dist.get('high (>0.7)', 0)}",
         f"  - 中 (0.3-0.7): {freshness_dist.get('medium (0.3-0.7)', 0)}",
         f"  - 低 (<0.3): {freshness_dist.get('low (<0.3)', 0)}",
@@ -281,13 +282,13 @@ def _run_evaluation(mode: str) -> str:
     return result.get("summary", result.get("message", "评估完成。"))
 
 
-
 def _update_api_key(provider: str, key: str, base_url: str) -> str:
-    """更新 API Key 配置（运行时生效，不持久化到 .env）. """
+    """更新 API Key 配置（运行时生效，不持久化到 .env）."""
     if not key or not key.strip():
         return f"❌ {provider} API Key 不能为空。"
     try:
         import os
+
         if provider == "OpenAI":
             os.environ["KA_OPENAI_API_KEY"] = key.strip()
             if base_url:
@@ -314,7 +315,9 @@ def _render_graph() -> str:
     if graph.number_of_nodes() == 0:
         return "知识图谱为空，请先摄入文档并执行知识抽取。"
 
-    net = Network(height="600px", width="100%", directed=True, bgcolor="#1a1a2e", font_color="white")
+    net = Network(
+        height="600px", width="100%", directed=True, bgcolor="#1a1a2e", font_color="white"
+    )
 
     type_colors = {
         "person": "#ff6b6b",
@@ -335,11 +338,65 @@ def _render_graph() -> str:
 
     for u, v, data in graph.edges(data=True):
         label = data.get("predicate", "related_to")
-        net.add_edge(u, v, title=label, label=label, arrows="to", font={"size": 10, "color": "#aaa"})
+        net.add_edge(
+            u, v, title=label, label=label, arrows="to", font={"size": 10, "color": "#aaa"}
+        )
 
     tmp = tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False, encoding="utf-8")
     net.save_graph(tmp.name)
     return tmp.name
+
+
+def _monitoring_dashboard() -> str:
+    """监控仪表盘 — 显示性能指标和计数器."""
+    try:
+        report = _get_orchestrator().get_monitoring_report()
+        timings = report.get("timings", {})
+        counters = report.get("counters", {})
+        lines = ["## 📊 性能指标\n"]
+
+        if timings:
+            lines.extend(
+                [
+                    "### 操作耗时 (ms)\n",
+                    "| 操作 | 次数 | 均值 | P50 | P95 | P99 | 最大 |",
+                    "|------|------|------|-----|-----|-----|------|",
+                ]
+            )
+            for operation, stats in timings.items():
+                if stats.get("count", 0) > 0:
+                    lines.append(
+                        f"| {operation} | {stats['count']} | {stats['mean']} | "
+                        f"{stats['p50']} | {stats['p95']} | {stats['p99']} | "
+                        f"{stats['max']} |"
+                    )
+
+        if counters:
+            lines.extend(
+                [
+                    "\n### 计数器\n",
+                    "| 指标 | 值 |",
+                    "|------|-----|",
+                ]
+            )
+            for name, value in sorted(counters.items()):
+                lines.append(f"| {name} | {value} |")
+
+        if not timings and not counters:
+            lines.append("暂无监控数据。请先执行一些操作（问答、摄入等）。")
+
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"❌ 获取监控数据失败: {exc}"
+
+
+def _reset_metrics() -> str:
+    """重置监控指标."""
+    try:
+        _get_orchestrator().metrics.reset()
+        return "✅ 监控指标已重置。"
+    except Exception as exc:
+        return f"❌ 重置失败: {exc}"
 
 
 def _export_knowledge_base(fmt: str) -> str:
@@ -364,6 +421,7 @@ def _export_knowledge_base(fmt: str) -> str:
 def _search_docs(keyword: str) -> str:
     """搜索文档."""
     from knowledge_agent.storage.doc_store import DocStore
+
     if not keyword or not keyword.strip():
         return "请输入搜索关键词。"
     docs = DocStore().search_documents(keyword.strip())
@@ -371,7 +429,9 @@ def _search_docs(keyword: str) -> str:
         return "未找到匹配的文档。"
     lines = [f"### 搜索结果 ({len(docs)} 条)\n"]
     for doc in docs[:30]:
-        lines.append(f"- **{doc['filename']}** (v{doc.get('version',1)}) — {doc['ingested_at'][:10]}")
+        lines.append(
+            f"- **{doc['filename']}** (v{doc.get('version', 1)}) — {doc['ingested_at'][:10]}"
+        )
         meta = doc.get("metadata", {})
         tags = meta.get("tags", [])
         if tags:
@@ -384,6 +444,7 @@ def _add_tag_to_doc(doc_id: str, tag: str) -> str:
     if not doc_id or not tag:
         return "请输入文档 ID 和标签。"
     from knowledge_agent.storage.doc_store import DocStore
+
     success = DocStore().add_tag(doc_id.strip(), tag.strip())
     if success:
         return f"✅ 已为文档 {doc_id[:8]}... 添加标签: {tag}"
@@ -393,9 +454,10 @@ def _add_tag_to_doc(doc_id: str, tag: str) -> str:
 def _cache_stats() -> str:
     """查询缓存统计."""
     try:
-        from knowledge_agent.cache import QueryCache
-        cache = QueryCache()
-        return f"**查询缓存**: {cache.size} 条 (TTL: 300s, 上限: 100 条)"
+        stats = _get_orchestrator().get_cache_stats()
+        return (
+            f"**查询缓存**: {stats['size']} 条 (TTL: {stats['ttl']}s, 上限: {stats['max_size']} 条)"
+        )
     except Exception:
         return "缓存未启用。"
 
@@ -435,7 +497,19 @@ def create_ui() -> gr.Blocks:
             file_input = gr.File(
                 label="选择文件",
                 file_count="multiple",
-                file_types=[".txt", ".md", ".pdf", ".log", ".csv", ".json", ".png", ".jpg", ".jpeg", ".gif", ".webp"],
+                file_types=[
+                    ".txt",
+                    ".md",
+                    ".pdf",
+                    ".log",
+                    ".csv",
+                    ".json",
+                    ".png",
+                    ".jpg",
+                    ".jpeg",
+                    ".gif",
+                    ".webp",
+                ],
             )
             ingest_btn = gr.Button("🚀 开始摄入", variant="primary")
             ingest_output = gr.Markdown(label="摄入结果")
@@ -468,7 +542,7 @@ def create_ui() -> gr.Blocks:
                 value=False,
                 info="启用后自动扩展查询，提升检索召回率，但响应会稍慢",
             )
-            chatbot = gr.ChatInterface(
+            gr.ChatInterface(
                 fn=_answer_question,
                 title="",
                 description="输入问题开始对话",
@@ -500,12 +574,16 @@ def create_ui() -> gr.Blocks:
             demo.load(_monitoring_dashboard, outputs=mon_output)
 
         with gr.Tab("⚙️ 设置"):
-            gr.Markdown("### API Key 配置\n配置 LLM 和 Embedding 的 API Key（当前会话有效，重启后失效）。")
+            gr.Markdown(
+                "### API Key 配置\n配置 LLM 和 Embedding 的 API Key（当前会话有效，重启后失效）。"
+            )
             with gr.Row():
                 with gr.Column():
                     gr.Markdown("#### OpenAI")
                     openai_key = gr.Textbox(label="API Key", type="password", placeholder="sk-...")
-                    openai_url = gr.Textbox(label="Base URL", placeholder="https://api.openai.com/v1")
+                    openai_url = gr.Textbox(
+                        label="Base URL", placeholder="https://api.openai.com/v1"
+                    )
                     openai_btn = gr.Button("保存 OpenAI 配置", variant="primary")
                     openai_out = gr.Markdown()
                     openai_btn.click(
@@ -515,7 +593,9 @@ def create_ui() -> gr.Blocks:
                     )
                 with gr.Column():
                     gr.Markdown("#### Anthropic")
-                    anth_key = gr.Textbox(label="API Key", type="password", placeholder="sk-ant-...")
+                    anth_key = gr.Textbox(
+                        label="API Key", type="password", placeholder="sk-ant-..."
+                    )
                     anth_btn = gr.Button("保存 Anthropic 配置", variant="primary")
                     anth_out = gr.Markdown()
                     anth_btn.click(
@@ -536,7 +616,9 @@ def create_ui() -> gr.Blocks:
         with gr.Tab("🏷️ 标签管理"):
             gr.Markdown("### 搜索与标签\n搜索文档、添加标签。")
             with gr.Row():
-                search_input = gr.Textbox(label="搜索关键词", placeholder="输入文件名或来源...", scale=3)
+                search_input = gr.Textbox(
+                    label="搜索关键词", placeholder="输入文件名或来源...", scale=3
+                )
                 search_btn = gr.Button("🔍 搜索", variant="primary", scale=1)
             search_output = gr.Markdown()
             search_btn.click(fn=_search_docs, inputs=search_input, outputs=search_output)
@@ -544,10 +626,14 @@ def create_ui() -> gr.Blocks:
             gr.Markdown("---\n### 添加标签")
             with gr.Row():
                 tag_doc_input = gr.Textbox(label="文档 ID", placeholder="输入文档 ID...", scale=2)
-                tag_name_input = gr.Textbox(label="标签名称", placeholder="例如: important, ai, review...", scale=2)
+                tag_name_input = gr.Textbox(
+                    label="标签名称", placeholder="例如: important, ai, review...", scale=2
+                )
                 tag_btn = gr.Button("添加标签", variant="secondary", scale=1)
             tag_output = gr.Markdown()
-            tag_btn.click(fn=_add_tag_to_doc, inputs=[tag_doc_input, tag_name_input], outputs=tag_output)
+            tag_btn.click(
+                fn=_add_tag_to_doc, inputs=[tag_doc_input, tag_name_input], outputs=tag_output
+            )
 
         with gr.Tab("📚 文档列表"):
             refresh_btn = gr.Button("🔄 刷新", variant="secondary")
