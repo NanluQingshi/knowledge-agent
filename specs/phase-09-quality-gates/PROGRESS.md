@@ -2,7 +2,7 @@
 
 ## 状态
 
-实现完成，PR #23 pytest 回归已修复，等待远端 CI 验证；完整依赖验收暂缓
+实现完成，PR #23 的 Python 3.11/3.12 CI 已通过；本地完整依赖验收暂缓
 
 ## 记录
 
@@ -21,7 +21,7 @@
 - [x] 修正 API reranker 测试的 mock 路径，使其匹配 `openai.OpenAI` 延迟导入。
 - [x] 完善 HTML loader 无 BeautifulSoup 时的降级清洗，整块移除 script/style/nav/footer/header 内容。
 - [x] 保留空 JSON 数组和对象的有效文档表示，避免被误判为空内容。
-- [ ] 确认上述三个 pytest 回归在 PR #23 的 Python 3.11/3.12 CI 中通过。
+- [x] 确认上述三个 pytest 回归在 PR #23 的 push/pull_request、Python 3.11/3.12 CI 中通过。
 
 ### 2026-07-30
 
@@ -49,7 +49,7 @@
 - 已在 `/tmp/knowledge-agent-phase9` 创建 Python 3.12 临时环境，但 PyPI 下载速度
   不稳定；按用户要求，本轮已停止依赖安装和全量 pytest。
 - tokenizer 已加入字符级离线降级，并有回归测试覆盖。
-- PR #23 的远端 CI 会在修复提交推送后重新执行；结果以 GitHub Actions 为准。
+- PR #23 的 push/pull_request、Python 3.11/3.12 GitHub Actions 均已通过。
 
 ## 后续验收
 
