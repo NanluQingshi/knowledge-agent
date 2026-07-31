@@ -2,7 +2,7 @@
 
 ## 状态
 
-实现完成，PR #23 CI 兼容性修复完成，完整依赖验收暂缓
+实现完成，PR #23 pytest 回归已修复，等待远端 CI 验证；完整依赖验收暂缓
 
 ## 记录
 
@@ -18,6 +18,10 @@
 - [x] Ruff 0.16.1 在 Python 3.12 隔离环境检查通过。
 - [x] 首次修复提交后确认远端 Ruff 已通过，后续失败进入 `Run tests`。
 - [x] 为 GitHub Actions 添加 pytest 失败注解，公开展示失败测试和断言位置。
+- [x] 修正 API reranker 测试的 mock 路径，使其匹配 `openai.OpenAI` 延迟导入。
+- [x] 完善 HTML loader 无 BeautifulSoup 时的降级清洗，整块移除 script/style/nav/footer/header 内容。
+- [x] 保留空 JSON 数组和对象的有效文档表示，避免被误判为空内容。
+- [ ] 确认上述三个 pytest 回归在 PR #23 的 Python 3.11/3.12 CI 中通过。
 
 ### 2026-07-30
 
