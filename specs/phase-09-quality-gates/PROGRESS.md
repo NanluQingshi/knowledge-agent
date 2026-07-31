@@ -2,9 +2,20 @@
 
 ## 状态
 
-实现完成，完整依赖验收暂缓
+实现完成，PR #23 CI 兼容性修复完成，完整依赖验收暂缓
 
 ## 记录
+
+### 2026-07-31
+
+- [x] 同步 `codex/phase9-quality-gates` 远端分支并复核 PR #23 状态。
+- [x] 确认 Python 3.11/3.12 的失败点均为 `Run Ruff`，Node.js 20 提示仅为 warning。
+- [x] 使用 CI 当前安装的 Ruff 0.16.1 复现 152 项检查错误。
+- [x] 确认显式沿用项目既有的 `E4`、`E7`、`E9`、`F` 规则集后检查通过。
+- [x] 将 Ruff 开发依赖、pre-commit 和 CI 版本统一到 0.16.x，并限制 CI 不跨次版本漂移。
+- [x] 将 `actions/checkout`、`actions/setup-python` 升级到 Node.js 24 运行时版本。
+- [x] 在 CI 日志中输出 pytest 和 Ruff 版本，便于后续诊断。
+- [x] Ruff 0.16.1 在 Python 3.12 隔离环境检查通过。
 
 ### 2026-07-30
 
@@ -32,6 +43,7 @@
 - 已在 `/tmp/knowledge-agent-phase9` 创建 Python 3.12 临时环境，但 PyPI 下载速度
   不稳定；按用户要求，本轮已停止依赖安装和全量 pytest。
 - tokenizer 已加入字符级离线降级，并有回归测试覆盖。
+- PR #23 的远端 CI 会在修复提交推送后重新执行；结果以 GitHub Actions 为准。
 
 ## 后续验收
 
