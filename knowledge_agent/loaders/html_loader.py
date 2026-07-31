@@ -61,9 +61,15 @@ class HTMLLoader(BaseLoader):
             lines = [line.strip() for line in text.splitlines() if line.strip()]
             return "\n".join(lines)
         except ImportError:
-            # 回退：简单的 HTML 标签剥离
+            # 回退：先移除非正文元素，再剥离其余 HTML 标签
             import re
 
-            text = re.sub(r"<[^>]+>", " ", html)
+            text = re.sub(
+                r"<(script|style|nav|footer|header)\b[^>]*>.*?</\1\s*>",
+                " ",
+                html,
+                flags=re.IGNORECASE | re.DOTALL,
+            )
+            text = re.sub(r"<[^>]+>", " ", text)
             text = re.sub(r"\s+", " ", text).strip()
             return text

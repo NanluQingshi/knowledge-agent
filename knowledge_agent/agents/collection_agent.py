@@ -8,12 +8,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
-from knowledge_agent.chunkers.base import Chunk
 from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 from knowledge_agent.config import settings
 from knowledge_agent.embeddings.embedder import Embedder
 from knowledge_agent.loaders import BaseLoader, MarkdownLoader, PDFLoader, TextLoader
-from knowledge_agent.loaders.base import Document
 from knowledge_agent.storage.doc_store import DocStore
 from knowledge_agent.storage.vector_store import VectorStore
 
@@ -124,9 +122,7 @@ class CollectionAgent:
                         continue
 
                     doc_id = uuid.uuid4().hex
-                    chunk_ids = [
-                        f"{doc_id}_chunk_{c.chunk_index}" for c in chunks
-                    ]
+                    chunk_ids = [f"{doc_id}_chunk_{c.chunk_index}" for c in chunks]
                     chunk_texts = [c.text for c in chunks]
                     embeddings = self._embedder.embed(chunk_texts)
 
@@ -158,10 +154,12 @@ class CollectionAgent:
                 files_processed += 1
 
             except Exception as exc:
-                errors.append({
-                    "file": str(file_path),
-                    "error": str(exc),
-                })
+                errors.append(
+                    {
+                        "file": str(file_path),
+                        "error": str(exc),
+                    }
+                )
 
         return {
             "documents_loaded": total_docs,
@@ -277,10 +275,12 @@ class CollectionAgent:
             for future in as_completed(futures):
                 result = future.result()
                 if "error" in result:
-                    all_errors.append({
-                        "file": str(futures[future]),
-                        "error": result["error"],
-                    })
+                    all_errors.append(
+                        {
+                            "file": str(futures[future]),
+                            "error": result["error"],
+                        }
+                    )
                 else:
                     total_docs += result["docs"]
                     total_chunks += result["chunks"]

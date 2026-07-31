@@ -1,6 +1,5 @@
 """配置管理模块 — 支持环境变量和 .env 文件."""
 
-from pathlib import Path
 from pydantic_settings import BaseSettings
 
 

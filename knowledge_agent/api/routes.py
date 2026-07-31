@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from knowledge_agent.config import settings
-from knowledge_agent.storage.vector_store import VectorStore
 
 
 class QueryRequest(BaseModel):
@@ -61,6 +60,7 @@ class DeleteResponse(BaseModel):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_orchestrator():
     """延迟导入并返回 Orchestrator 实例."""
     from knowledge_agent.agents.orchestrator import Orchestrator
@@ -82,10 +82,9 @@ class EvalResponse(BaseModel):
     status: str
     summary: str
     num_queries: int
-    details: list[dict[str, Any]] = []
+    details: list[dict[str, Any]] = Field(default_factory=list)
 
 
-@app.post("/evaluate/retrieval", response_model=EvalResponse)
 async def evaluate_retrieval(req: EvalRetrievalRequest):
     """评估检索质量."""
     from knowledge_agent.evaluation import EvaluationRunner
@@ -105,7 +104,6 @@ class EvalAnswerRequest(BaseModel):
     category: str | None = None
 
 
-@app.post("/evaluate/answer", response_model=EvalResponse)
 async def evaluate_answer(req: EvalAnswerRequest):
     """评估答案质量."""
     from knowledge_agent.evaluation import EvaluationRunner
@@ -143,11 +141,16 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.post("/evaluate/retrieval", response_model=EvalResponse)(evaluate_retrieval)
+    app.post("/evaluate/answer", response_model=EvalResponse)(evaluate_answer)
+
     @app.post("/ingest", response_model=IngestResponse)
-    async def ingest_file(file: UploadFile = File(None)):
+    async def ingest_file(file: UploadFile | None = File(default=None)):
         """摄入文档文件."""
         if file is None:
             raise HTTPException(status_code=400, detail="No file provided")
+
+        from knowledge_agent.storage.vector_store import VectorStore
 
         # 保存临时文件
         tmp_path = Path(settings.data_dir) / "tmp"
@@ -178,8 +181,6 @@ def create_app() -> FastAPI:
     @app.post("/query", response_model=QueryResponse)
     async def query_endpoint(req: QueryRequest):
         """问答查询."""
-        from knowledge_agent.agents.orchestrator import Orchestrator
-
         orchestrator = _get_orchestrator()
         result = orchestrator.run_query(req.question, top_k=req.top_k)
 
@@ -193,20 +194,24 @@ def create_app() -> FastAPI:
         """流式问答查询（Server-Sent Events）."""
         from fastapi.responses import StreamingResponse
 
-        from knowledge_agent.agents.orchestrator import Orchestrator
-
         orchestrator = _get_orchestrator()
 
         async def event_stream():
             # 先发送来源信息
             # (为简化，先执行一次非流式查询获取 sources)
             result = orchestrator.run_query(req.question, top_k=req.top_k)
-            import json
             sources_data = [
-                {"text": s.get("text", "")[:200], "source": s.get("metadata", {}).get("source", "")}
+                {
+                    "text": s.get("text", "")[:200],
+                    "source": s.get("metadata", {}).get("source", ""),
+                }
                 for s in result.get("sources", [])
             ]
-            yield f"data: {json.dumps({'type': 'sources', 'data': sources_data}, ensure_ascii=False)}\n\n"
+            payload = json.dumps(
+                {"type": "sources", "data": sources_data},
+                ensure_ascii=False,
+            )
+            yield f"data: {payload}\n\n"
 
             # 流式输出回答
             for chunk in orchestrator.run_query_stream(req.question, top_k=req.top_k):
@@ -267,6 +272,7 @@ def create_app() -> FastAPI:
     async def health():
         """健康检查."""
         from knowledge_agent.storage.doc_store import DocStore
+        from knowledge_agent.storage.vector_store import VectorStore
 
         doc_store = DocStore()
         vector_store = VectorStore()

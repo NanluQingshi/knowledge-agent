@@ -54,6 +54,9 @@ class JSONLoader(BaseLoader):
         prefix = "  " * indent
         lines: list[str] = []
 
+        if isinstance(data, (dict, list)) and not data:
+            return f"{prefix}{json.dumps(data, ensure_ascii=False)}"
+
         if isinstance(data, dict):
             # 尝试提取 content/text 字段作为直接内容
             if indent == 0:

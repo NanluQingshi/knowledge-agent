@@ -1,6 +1,6 @@
 """Tests for document chunkers: FixedChunker, SemanticChunker, RecursiveChunker."""
 
-import pytest
+from unittest.mock import patch
 
 from knowledge_agent.chunkers.base import Chunk
 from knowledge_agent.chunkers.fixed_chunker import FixedChunker
@@ -11,6 +11,7 @@ from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 # ===================================================================
 # FixedChunker
 # ===================================================================
+
 
 class TestFixedChunker:
     """Tests for FixedChunker."""
@@ -82,10 +83,27 @@ class TestFixedChunker:
             assert hasattr(c, "metadata")
             assert hasattr(c, "chunk_index")
 
+    def test_tokenizer_falls_back_offline(self):
+        from knowledge_agent.chunkers.base import get_token_encoding
+
+        get_token_encoding.cache_clear()
+        try:
+            with patch(
+                "knowledge_agent.chunkers.base.tiktoken.get_encoding",
+                side_effect=ConnectionError("offline"),
+            ):
+                chunker = FixedChunker(chunk_size=4, chunk_overlap=1)
+                chunks = chunker.chunk("abcdef")
+        finally:
+            get_token_encoding.cache_clear()
+
+        assert [chunk.text for chunk in chunks] == ["abcd", "def"]
+
 
 # ===================================================================
 # SemanticChunker
 # ===================================================================
+
 
 class TestSemanticChunker:
     """Tests for SemanticChunker."""
@@ -168,6 +186,7 @@ class TestSemanticChunker:
 # ===================================================================
 # RecursiveChunker
 # ===================================================================
+
 
 class TestRecursiveChunker:
     """Tests for RecursiveChunker."""

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -15,6 +15,7 @@ from knowledge_agent.evaluation.runner import EvaluationRunner
 # ===================================================================
 # EvaluationDataset
 # ===================================================================
+
 
 class TestEvaluationDataset:
     """Tests for EvaluationDataset (JSON-backed storage)."""
@@ -98,6 +99,7 @@ class TestEvaluationDataset:
 # ===================================================================
 # RetrievalMetrics
 # ===================================================================
+
 
 class TestRetrievalMetrics:
     """Tests for retrieval quality metrics."""
@@ -237,6 +239,7 @@ class TestRetrievalMetrics:
 # EvaluationRunner
 # ===================================================================
 
+
 class TestEvaluationRunner:
     """Tests for EvaluationRunner with mocked Orchestrator."""
 
@@ -291,9 +294,7 @@ class TestEvaluationRunner:
         result = runner.evaluate_retrieval(top_k=5)
         assert result["status"] == "no_data"
 
-    def test_evaluate_answer_quality(
-        self, mock_orchestrator, dataset: EvaluationDataset
-    ):
+    def test_evaluate_answer_quality(self, mock_orchestrator, dataset: EvaluationDataset):
         runner = EvaluationRunner(
             orchestrator=mock_orchestrator,
             dataset=dataset,

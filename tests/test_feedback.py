@@ -1,8 +1,7 @@
 """Tests for feedback and evolution modules: FeedbackCollector, FreshnessManager, KnowledgeScorer."""
 
-import json
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -14,6 +13,7 @@ from knowledge_agent.feedback.scorer import KnowledgeScorer
 # ===================================================================
 # FeedbackCollector
 # ===================================================================
+
 
 class TestFeedbackCollector:
     """Tests for SQLite-backed FeedbackCollector."""
@@ -97,6 +97,7 @@ class TestFeedbackCollector:
 # FreshnessManager
 # ===================================================================
 
+
 class TestFreshnessManager:
     """Tests for FreshnessManager (time-decay scoring)."""
 
@@ -138,8 +139,16 @@ class TestFreshnessManager:
 
     def test_calculate_batch_adds_freshness_score(self, freshness):
         items = [
-            {"id": "1", "ingested_at": datetime.now(timezone.utc).isoformat(), "reference_count": 0},
-            {"id": "2", "ingested_at": (datetime.now(timezone.utc) - timedelta(days=500)).isoformat(), "reference_count": 0},
+            {
+                "id": "1",
+                "ingested_at": datetime.now(timezone.utc).isoformat(),
+                "reference_count": 0,
+            },
+            {
+                "id": "2",
+                "ingested_at": (datetime.now(timezone.utc) - timedelta(days=500)).isoformat(),
+                "reference_count": 0,
+            },
         ]
         result = freshness.calculate_batch(items)
         assert len(result) == 2
@@ -151,7 +160,11 @@ class TestFreshnessManager:
     def test_get_stale_documents(self, freshness, mock_doc_store):
         now = datetime.now(timezone.utc)
         mock_doc_store.list_documents.return_value = [
-            {"id": "old_unused", "ingested_at": (now - timedelta(days=400)).isoformat(), "chunk_count": 0},
+            {
+                "id": "old_unused",
+                "ingested_at": (now - timedelta(days=400)).isoformat(),
+                "chunk_count": 0,
+            },
             {"id": "new_used", "ingested_at": now.isoformat(), "chunk_count": 10},
         ]
         stale = freshness.get_stale_documents(min_age_days=365, max_references=2)
@@ -168,7 +181,11 @@ class TestFreshnessManager:
 
     def test_get_decay_schedule(self, freshness):
         items = [
-            {"id": "1", "ingested_at": datetime.now(timezone.utc).isoformat(), "reference_count": 5},
+            {
+                "id": "1",
+                "ingested_at": datetime.now(timezone.utc).isoformat(),
+                "reference_count": 5,
+            },
         ]
         schedule = freshness.get_decay_schedule(items, days_list=[30, 90])
         assert 30 in schedule
@@ -191,6 +208,7 @@ class TestFreshnessManager:
 # ===================================================================
 # KnowledgeScorer
 # ===================================================================
+
 
 class TestKnowledgeScorer:
     """Tests for KnowledgeScorer (quality scoring)."""

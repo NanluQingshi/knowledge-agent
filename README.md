@@ -40,9 +40,6 @@ export KA_EMBEDDING_MODEL="text-embedding-3-small"
 # 摄入文档
 ka ingest ./docs/
 
-# 批量并行摄入（自动多线程加速）
-ka ingest --parallel ./docs/
-
 # 提问
 ka query "什么是 GraphRAG？"
 
@@ -75,7 +72,7 @@ docker compose logs -f
 ka webui
 ```
 
-启动后打开 http://localhost:7860，支持 8 个功能 Tab：
+启动后打开 http://localhost:7860，支持以下功能 Tab：
 
 | Tab | 功能 |
 |-----|------|
@@ -87,13 +84,18 @@ ka webui
 | 📈 监控 | 实时性能指标（P50/P95/P99 延迟、请求计数） |
 | 📋 评估 | 检索质量（MRR/Recall/NDCG）和答案质量评估 |
 | ⚙️ 设置 | OpenAI / Anthropic API Key 动态配置 |
+| 📤 导出 | 将知识库导出为 Markdown 或 JSON |
+| 🏷️ 标签管理 | 搜索文档并维护标签 |
 
 ### CLI
 
 | 命令 | 说明 |
 |------|------|
-| `ka ingest <path>` | 摄入文档（文件或目录） |
+| `ka ingest <path>` | 摄入文档，可配置 chunk 大小、抽取和质检 |
 | `ka query <question>` | RAG 问答 |
+| `ka delete <doc-id>` | 删除文档及关联数据 |
+| `ka eval [retrieval\|answer\|all]` | 运行检索或答案质量评估 |
+| `ka eval-dataset <command>` | 管理评估数据集 |
 | `ka serve` | 启动 REST API 服务 |
 | `ka webui` | 启动 Gradio Web UI |
 
@@ -103,7 +105,11 @@ ka webui
 |------|------|------|
 | `/ingest` | POST | 上传并摄入文档文件 |
 | `/query` | POST | RAG 问答 |
+| `/query/stream` | POST | Server-Sent Events 流式问答 |
 | `/documents` | GET | 列出已摄入文档 |
+| `/documents/{doc_id}` | DELETE | 删除文档及关联数据 |
+| `/evaluate/retrieval` | POST | 评估检索质量 |
+| `/evaluate/answer` | POST | 评估答案质量 |
 | `/health` | GET | 健康检查 |
 
 ## 支持的文档格式
@@ -150,9 +156,11 @@ ka webui
 - **Embedding 回退**: OpenAI API 不可用时自动回退到本地 sentence-transformers 模型
 - **API Key 管理**: Web UI 运行时动态配置 LLM 提供商
 - **pre-commit hooks**: ruff 自动化代码格式与 lint 检查
+- **CI 质量门禁**: GitHub Actions 在 Python 3.11/3.12 执行编译、Ruff 和 pytest
 
 ## 项目文档
 
 - [PLAN.md](PLAN.md) — 原始 5 个 Phase 开发计划
 - [ROADMAP.md](ROADMAP.md) — 后续迭代路线图与完成状态
 - [DESIGN.md](DESIGN.md) — 设计方案与技术选型报告
+- [specs/README.md](specs/README.md) — 后续实现 spec 索引与进度目录

@@ -15,6 +15,7 @@ chromadb = "^0.5.0"
 openai = "^1.50.0"
 fastapi = "^0.115.0"
 uvicorn = {extras = ["standard"], version = "^0.30.0"}
+python-multipart = "^0.0.20"
 pypdf = "^5.0.0"
 unstructured = {version = ">=0.10.0", optional = true}
 tiktoken = "^0.7.0"
@@ -50,7 +51,7 @@ all = ["python-docx", "beautifulsoup4", "httpx", "Pillow", "pytesseract", "ragas
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.0"
 pytest-asyncio = "^0.24.0"
-ruff = "^0.6.0"
+ruff = "^0.16.1"
 pre-commit = "^3.8.0"
 
 [build-system]
@@ -60,6 +61,9 @@ build-backend = "poetry.core.masonry.api"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

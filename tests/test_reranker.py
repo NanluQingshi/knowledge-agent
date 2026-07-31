@@ -69,7 +69,7 @@ class TestCrossEncoderRerankerAPIMode:
             assert len(out) == 1
             assert "rerank_score" in out[0]
 
-    @patch("knowledge_agent.retrieval.reranker.OpenAI")
+    @patch("openai.OpenAI")
     def test_api_mode_with_key(self, mock_openai, reranker: CrossEncoderReranker):
         mock_client = MagicMock()
         mock_response = MagicMock()

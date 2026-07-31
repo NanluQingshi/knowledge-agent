@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from knowledge_agent.config import settings
 from knowledge_agent.storage.doc_store import DocStore
 from knowledge_agent.storage.vector_store import VectorStore
 
@@ -116,11 +115,13 @@ class Exporter:
         chunks_export: list[dict[str, Any]] = []
         if all_data.get("ids"):
             for i, cid in enumerate(all_data["ids"]):
-                chunks_export.append({
-                    "id": cid,
-                    "text": (all_data["documents"] or [""])[i] or "",
-                    "metadata": (all_data["metadatas"] or [{}])[i] or {},
-                })
+                chunks_export.append(
+                    {
+                        "id": cid,
+                        "text": (all_data["documents"] or [""])[i] or "",
+                        "metadata": (all_data["metadatas"] or [{}])[i] or {},
+                    }
+                )
 
         export = {
             "exported_at": datetime.now(timezone.utc).isoformat(),

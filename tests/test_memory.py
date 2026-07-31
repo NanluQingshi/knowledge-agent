@@ -1,8 +1,6 @@
 """Tests for memory modules: WorkingMemory, SemanticMemory, ProceduralMemory."""
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -15,6 +13,7 @@ from knowledge_agent.memory.procedural_memory import ProceduralMemory
 # ===================================================================
 # WorkingMemory
 # ===================================================================
+
 
 class TestWorkingMemory:
     """Tests for WorkingMemory (short-term conversation context)."""
@@ -63,7 +62,9 @@ class TestWorkingMemory:
 
     def test_auto_trim(self):
         memory = WorkingMemory(max_tokens=10)  # very low token budget
-        memory.add_message("user", "This is a very long message that should exceed the token limit by far")
+        memory.add_message(
+            "user", "This is a very long message that should exceed the token limit by far"
+        )
         memory.add_message("assistant", "Another long message that will cause trimming")
         # After adding, the trim should have kicked in
         assert memory.message_count >= 1
@@ -114,6 +115,7 @@ class TestWorkingMemory:
 # SemanticMemory
 # ===================================================================
 
+
 class TestSemanticMemory:
     """Tests for SemanticMemory (graph-backed long-term fact storage)."""
 
@@ -126,7 +128,9 @@ class TestSemanticMemory:
         return SemanticMemory(graph_store=graph_store)
 
     def test_remember_fact_adds_entities_and_relation(self, sem_memory):
-        sem_memory.remember_fact("Alice", "works_at", "AcmeCorp", confidence=0.9, source="document1")
+        sem_memory.remember_fact(
+            "Alice", "works_at", "AcmeCorp", confidence=0.9, source="document1"
+        )
         # Check entities exist
         alice_id = "alice"
         acme_id = "acmecorp"
@@ -195,6 +199,7 @@ class TestSemanticMemory:
 # ===================================================================
 # ProceduralMemory
 # ===================================================================
+
 
 class TestProceduralMemory:
     """Tests for ProceduralMemory (workflow template storage)."""
