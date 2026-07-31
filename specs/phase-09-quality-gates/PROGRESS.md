@@ -16,6 +16,8 @@
 - [x] 将 `actions/checkout`、`actions/setup-python` 升级到 Node.js 24 运行时版本。
 - [x] 在 CI 日志中输出 pytest 和 Ruff 版本，便于后续诊断。
 - [x] Ruff 0.16.1 在 Python 3.12 隔离环境检查通过。
+- [x] 首次修复提交后确认远端 Ruff 已通过，后续失败进入 `Run tests`。
+- [x] 为 GitHub Actions 添加 pytest 失败注解，公开展示失败测试和断言位置。
 
 ### 2026-07-30
 

@@ -32,6 +32,7 @@ jobs:
           python -m pip install -e . \
             "pytest>=8.3,<9" \
             "pytest-asyncio>=0.24,<0.25" \
+            "pytest-github-actions-annotate-failures==0.4.2" \
             "ruff>=0.16.1,<0.17"
 
       - name: Show quality tool versions
@@ -46,4 +47,4 @@ jobs:
         run: python -m ruff check knowledge_agent tests
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q --exclude-warning-annotations
