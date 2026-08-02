@@ -13,8 +13,9 @@
 | Phase 6 | 修复与优化（CR-01 ~ NF-02） | `feature/phase6-fixes` | ✅ 已合并 |
 | Phase 7 | 功能增强 | 多个分支 | ✅ 已合并 |
 | Phase 8 | 监控、性能与功能扩展 | 多个分支 | ✅ 已合并 |
-| Phase 9 | 主线稳定性与 CI 质量门禁 | `codex/phase9-quality-gates` | 🟡 实现完成，验收暂缓 |
-| Phase 10-12 | 容器部署、工作流、生产存储 | 见 `specs/` | 📋 规划中 |
+| Phase 9 | 主线稳定性与 CI 质量门禁 | `codex/phase9-quality-gates` | ✅ 已合并 |
+| Phase 10 | Docker 与本地部署 | `codex/phase10-container-deployment` | 🟡 实现完成，运行验收待执行 |
+| Phase 11-12 | 工作流、生产存储 | 见 `specs/` | 📋 规划中 |
 
 ---
 
@@ -133,7 +134,7 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 | tokenizer 离线降级 | ✅ 已实现 |
 | API/CLI/Web UI/Orchestrator 回归测试 | ✅ 已实现 |
 | GitHub Actions 编译、Ruff、pytest | ✅ 已实现 |
-| Python 3.11/3.12 最终验证 | ⏸️ 按要求暂缓 |
+| Python 3.11/3.12 GitHub Actions 验证 | ✅ 已通过 |
 
 详细范围和进度见
 [`specs/phase-09-quality-gates/`](specs/phase-09-quality-gates/)。
@@ -162,4 +163,5 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 | `feature/polish` | 打磨完善 | 10 | ✅ 已合并 |
 | `feature/monitoring` | 监控与可观测性 | 1 | ✅ 已合并 |
 | `feature/performance` | 性能优化与缓存 | 1 | ✅ 已合并 |
-| `codex/phase9-quality-gates` | 主线稳定性与 CI | 当前开发 | 🟡 实现完成 |
+| `codex/phase9-quality-gates` | 主线稳定性与 CI | 5 | ✅ 已合并 |
+| `codex/phase10-container-deployment` | Docker 与本地部署 | 当前开发 | 🟡 实现完成，运行验收待执行 |

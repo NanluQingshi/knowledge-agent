@@ -53,16 +53,38 @@ ka webui
 ## Docker 部署
 
 ```bash
-# 构建并启动（需先配置 API Key）
-export KA_OPENAI_API_KEY="sk-xxx"
+# 创建本地配置并填写需要的 API Key
+cp .env.example .env
+
+# 构建并启动 API 与 Web UI
 docker compose up -d
+
+# 也可以只启动其中一种模式
+docker compose up -d api
+docker compose up -d webui
 
 # 访问 Web UI: http://localhost:7860
 # 访问 API: http://localhost:8000
 
+# 查看服务健康状态
+docker compose ps
+
 # 查看日志
 docker compose logs -f
 ```
+
+默认镜像以非 root 用户运行、安装常用文档加载器，并使用具名卷
+`knowledge-agent-data` 持久化数据。可在 `.env` 中修改宿主机端口、卷名和镜像标签。
+
+OCR 系统依赖默认不安装，需要图片文字识别时执行：
+
+```bash
+KA_DOCKER_INSTALL_OCR=true docker compose build
+docker compose up -d
+```
+
+评估模块等全部可选 Python 依赖可通过 `KA_DOCKER_EXTRAS=all` 构建。运行时密钥只从
+Compose 环境变量注入，`.env` 和本地 `data/` 不会进入镜像构建上下文。
 
 ## 功能模块
 

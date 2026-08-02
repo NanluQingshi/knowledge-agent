@@ -11,7 +11,7 @@
 | 顺序 | 目录 | 主题 | 状态 |
 |---|---|---|---|
 | 1 | `phase-09-quality-gates/` | 主线稳定性与 CI 质量门禁 | 实现完成，验收暂缓 |
-| 2 | `phase-10-container-deployment/` | Docker 与本地部署 | 规划中 |
+| 2 | `phase-10-container-deployment/` | Docker 与本地部署 | 实现完成，运行验收待执行 |
 | 3 | `phase-11-workflow-orchestration/` | 可恢复的工作流编排 | 规划中 |
 | 4 | `phase-12-production-storage/` | 生产级存储适配 | 规划中 |
 

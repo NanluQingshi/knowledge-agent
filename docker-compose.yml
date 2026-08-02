@@ -1,30 +1,58 @@
-version: "3.8"
+x-app: &app
+  build:
+    context: .
+    args:
+      POETRY_EXTRAS: ${KA_DOCKER_EXTRAS:-loaders}
+      INSTALL_OCR: ${KA_DOCKER_INSTALL_OCR:-false}
+  image: knowledge-agent:${KA_IMAGE_TAG:-local}
+  init: true
+  restart: unless-stopped
+  environment:
+    KA_OPENAI_API_KEY: ${KA_OPENAI_API_KEY:-}
+    KA_OPENAI_BASE_URL: ${KA_OPENAI_BASE_URL:-https://api.openai.com/v1}
+    KA_LLM_MODEL: ${KA_LLM_MODEL:-gpt-4o}
+    KA_ANTHROPIC_API_KEY: ${KA_ANTHROPIC_API_KEY:-}
+    KA_ANTHROPIC_MODEL: ${KA_ANTHROPIC_MODEL:-claude-sonnet-4-6}
+  volumes:
+    - knowledge_data:/app/data
 
 services:
   api:
-    build: .
+    <<: *app
     ports:
-      - "8000:8000"
-    volumes:
-      - ./data:/app/data
-    environment:
-      - KA_OPENAI_API_KEY=${KA_OPENAI_API_KEY:-}
-      - KA_OPENAI_BASE_URL=${KA_OPENAI_BASE_URL:-https://api.openai.com/v1}
-      - KA_LLM_MODEL=${KA_LLM_MODEL:-gpt-4o}
-    command: ka serve
-    restart: unless-stopped
+      - "${KA_API_PORT:-8000}:8000"
+    command: ["ka", "serve"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 5
 
   webui:
-    build: .
+    <<: *app
     ports:
-      - "7860:7860"
-    volumes:
-      - ./data:/app/data
-    environment:
-      - KA_OPENAI_API_KEY=${KA_OPENAI_API_KEY:-}
-      - KA_OPENAI_BASE_URL=${KA_OPENAI_BASE_URL:-https://api.openai.com/v1}
-      - KA_LLM_MODEL=${KA_LLM_MODEL:-gpt-4o}
-    command: ka webui
-    restart: unless-stopped
-    depends_on:
-      - api
+      - "${KA_WEBUI_PORT:-7860}:7860"
+    command: ["ka", "webui"]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:7860/', timeout=5).read()",
+        ]
+      interval: 15s
+      timeout: 5s
+      start_period: 45s
+      retries: 5
+
+volumes:
+  knowledge_data:
+    name: ${KA_DATA_VOLUME:-knowledge-agent-data}
