@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -70,7 +71,12 @@ class Exporter:
 
         for source, doc_list in by_source.items():
             filename = doc_list[0].get("filename", "unknown")
-            safe_name = "".join(c if c.isalnum() or c in "._- " else "_" for c in filename)
+            # 清理文件名：移除路径分隔符、特殊字符，限制长度
+            safe_name = re.sub(r"[^a-zA-Z0-9\u4e00-\u9fff._-]", "_", filename)
+            safe_name = safe_name.replace("..", "_").replace("/", "_").replace("\\", "_")
+            safe_name = safe_name[:200]  # 限制长度
+            if not safe_name:
+                safe_name = "unnamed_document"
             md_lines = [
                 f"# {filename}\n",
                 f"- **来源**: {source}",
