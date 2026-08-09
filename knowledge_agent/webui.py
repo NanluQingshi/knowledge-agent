@@ -485,12 +485,15 @@ def create_ui() -> gr.Blocks:
         css="""
         footer { display: none !important; }
         .gradio-container { max-width: 1200px !important; }
+        #theme-toggle { position: fixed; top: 10px; right: 10px; z-index: 1000; }
         """,
     ) as demo:
         gr.Markdown(
             "# 🧠 知识沉淀 Agent\n\n"
             "多源采集 + LLM 结构化抽取 + 混合存储 + 多 Agent 协作 + 持久化记忆"
         )
+
+        theme_toggle = gr.Button("🌙 切换深色模式", elem_id="theme-toggle", size="sm")
 
         with gr.Tab("📥 摄入文档"):
             gr.Markdown("### 上传文档文件\n支持 .txt / .md / .pdf / .log / .csv / .json 格式")
@@ -711,6 +714,24 @@ def create_ui() -> gr.Blocks:
                 fn=lambda: _run_evaluation("answer"),
                 outputs=eval_output,
             )
+
+        # 深色模式切换（JS 实现，刷新页面不丢失）
+        demo.load(None, js="""
+        () => {
+            const btn = document.getElementById('theme-toggle');
+            if (!btn) return;
+            btn.addEventListener('click', () => {
+                const dark = document.body.classList.toggle('dark');
+                localStorage.setItem('ka-dark-mode', dark ? '1' : '0');
+                btn.textContent = dark ? '☀️ 切换浅色模式' : '🌙 切换深色模式';
+            });
+            // 恢复上次选择
+            if (localStorage.getItem('ka-dark-mode') === '1') {
+                document.body.classList.add('dark');
+                btn.textContent = '☀️ 切换浅色模式';
+            }
+        }
+        """)
 
     return demo
 
