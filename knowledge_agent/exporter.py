@@ -145,3 +145,28 @@ class Exporter:
             encoding="utf-8",
         )
         return out
+
+    def export_csv(self, output_path: str | Path) -> Path:
+        """导出知识库文档元数据为 CSV 文件.
+
+        Args:
+            output_path: 输出 CSV 文件路径.
+
+        Returns:
+            输出文件路径.
+        """
+        import csv
+
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+
+        docs = self._doc_store.list_documents()
+        fields = ["id", "filename", "source", "file_type", "version", "chunk_count", "ingested_at"]
+
+        with out.open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=fields)
+            writer.writeheader()
+            for doc in docs:
+                writer.writerow({field: doc.get(field, "") for field in fields})
+
+        return out

@@ -410,6 +410,10 @@ def _export_knowledge_base(fmt: str) -> str:
             out_dir = Path(tempfile.mkdtemp(prefix="kb_export_"))
             path = exporter.export_markdown(out_dir)
             return f"✅ 已导出为 Markdown: {path}\n共 {len(list(path.glob('*.md')))} 个文件"
+        elif fmt == "csv":
+            tmp = Path(tempfile.mktemp(suffix=".csv", prefix="kb_export_"))
+            path = exporter.export_csv(tmp)
+            return f"✅ 已导出为 CSV: {path}"
         else:
             tmp = Path(tempfile.mktemp(suffix=".json", prefix="kb_export_"))
             path = exporter.export_json(tmp)
@@ -605,13 +609,15 @@ def create_ui() -> gr.Blocks:
                     )
 
         with gr.Tab("📤 导出"):
-            gr.Markdown("### 导出知识库\n将知识库导出为 Markdown 或 JSON 格式。")
+            gr.Markdown("### 导出知识库\n将知识库导出为 Markdown / JSON / CSV 格式。")
             with gr.Row():
                 md_btn = gr.Button("📝 导出为 Markdown", variant="primary", scale=1)
                 json_btn = gr.Button("💾 导出为 JSON", variant="primary", scale=1)
+                csv_btn = gr.Button("📊 导出为 CSV", variant="primary", scale=1)
             export_output = gr.Markdown()
             md_btn.click(fn=lambda: _export_knowledge_base("markdown"), outputs=export_output)
             json_btn.click(fn=lambda: _export_knowledge_base("json"), outputs=export_output)
+            csv_btn.click(fn=lambda: _export_knowledge_base("csv"), outputs=export_output)
 
         with gr.Tab("🏷️ 标签管理"):
             gr.Markdown("### 搜索与标签\n搜索文档、添加标签。")
