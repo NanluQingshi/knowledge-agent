@@ -287,6 +287,57 @@ class DocStore:
             conn.commit()
         return True
 
+    def batch_add_tag(self, doc_ids: list[str], tags: list[str]) -> dict[str, Any]:
+        """为多个文档批量添加标签.
+
+        Args:
+            doc_ids: 文档 ID 列表.
+            tags: 标签名称列表.
+
+        Returns:
+            操作统计：{success: int, failed: int, skipped: int, failed_ids: list}.
+        """
+        success = 0
+        failed = 0
+        skipped = 0
+        failed_ids: list[str] = []
+
+        for doc_id in doc_ids:
+            doc = self.get_document(doc_id)
+            if doc is None:
+                failed += 1
+                failed_ids.append(doc_id)
+                continue
+
+            meta = doc.get("metadata", {})
+            existing_tags = meta.get("tags", [])
+            added_any = False
+            for tag in tags:
+                if tag not in existing_tags:
+                    existing_tags.append(tag)
+                    added_any = True
+
+            if not added_any:
+                skipped += 1
+                continue
+
+            meta["tags"] = existing_tags
+            metadata_json = json.dumps(meta, ensure_ascii=False)
+            with self._connection() as conn:
+                conn.execute(
+                    "UPDATE documents SET metadata_json = ? WHERE id = ?",
+                    (metadata_json, doc_id),
+                )
+                conn.commit()
+            success += 1
+
+        return {
+            "success": success,
+            "failed": failed,
+            "skipped": skipped,
+            "failed_ids": failed_ids,
+        }
+
     def get_all_tags(self) -> list[str]:
         """获取所有文档中使用的标签列表.
 

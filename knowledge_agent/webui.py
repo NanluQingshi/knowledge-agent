@@ -451,6 +451,29 @@ def _add_tag_to_doc(doc_id: str, tag: str) -> str:
     return f"❌ 未找到文档: {doc_id}"
 
 
+def _batch_add_tags(doc_ids: str, tags: str) -> str:
+    """批量添加标签（多个文档 ID，多个标签，用逗号分隔）."""
+    if not doc_ids or not tags:
+        return "请输入文档 ID 列表和标签列表。"
+    from knowledge_agent.storage.doc_store import DocStore
+
+    id_list = [i.strip() for i in doc_ids.replace("，", ",").split(",") if i.strip()]
+    tag_list = [t.strip() for t in tags.replace("，", ",").split(",") if t.strip()]
+    if not id_list or not tag_list:
+        return "输入的文档 ID 或标签为空。"
+
+    result = DocStore().batch_add_tag(id_list, tag_list)
+    lines = [
+        f"✅ 批量打标签完成",
+        f"  - 成功: {result['success']}",
+        f"  - 跳过（已有标签）: {result['skipped']}",
+        f"  - 失败（文档不存在）: {result['failed']}",
+    ]
+    if result["failed_ids"]:
+        lines.append(f"  - 未找到的 ID: {', '.join(result['failed_ids'][:5])}")
+    return "\n".join(lines)
+
+
 def _cache_stats() -> str:
     """查询缓存统计."""
     try:
@@ -633,6 +656,22 @@ def create_ui() -> gr.Blocks:
             tag_output = gr.Markdown()
             tag_btn.click(
                 fn=_add_tag_to_doc, inputs=[tag_doc_input, tag_name_input], outputs=tag_output
+            )
+
+            gr.Markdown("---\n### 🏷️ 批量添加标签（逗号分隔）")
+            with gr.Row():
+                batch_ids_input = gr.Textbox(
+                    label="文档 ID 列表", placeholder="doc1, doc2, doc3...", scale=2
+                )
+                batch_tags_input = gr.Textbox(
+                    label="标签列表", placeholder="important, ai, review...", scale=2
+                )
+                batch_tag_btn = gr.Button("批量添加", variant="primary", scale=1)
+            batch_tag_output = gr.Markdown()
+            batch_tag_btn.click(
+                fn=_batch_add_tags,
+                inputs=[batch_ids_input, batch_tags_input],
+                outputs=batch_tag_output,
             )
 
         with gr.Tab("📚 文档列表"):
