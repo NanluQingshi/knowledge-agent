@@ -493,7 +493,7 @@ def create_ui() -> gr.Blocks:
             "多源采集 + LLM 结构化抽取 + 混合存储 + 多 Agent 协作 + 持久化记忆"
         )
 
-        theme_toggle = gr.Button("🌙 切换深色模式", elem_id="theme-toggle", size="sm")
+        gr.Button("🌙 切换深色模式", elem_id="theme-toggle", size="sm")
 
         with gr.Tab("📥 摄入文档"):
             gr.Markdown("### 上传文档文件\n支持 .txt / .md / .pdf / .log / .csv / .json 格式")
