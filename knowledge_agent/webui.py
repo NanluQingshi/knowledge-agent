@@ -464,7 +464,7 @@ def _batch_add_tags(doc_ids: str, tags: str) -> str:
 
     result = DocStore().batch_add_tag(id_list, tag_list)
     lines = [
-        f"✅ 批量打标签完成",
+        "✅ 批量打标签完成",
         f"  - 成功: {result['success']}",
         f"  - 跳过（已有标签）: {result['skipped']}",
         f"  - 失败（文档不存在）: {result['failed']}",
