@@ -45,12 +45,27 @@ def cli() -> None:
 )
 @click.option("--extract/--no-extract", default=True, help="是否执行知识抽取（实体/关系提取）")
 @click.option("--quality/--no-quality", default=True, help="是否执行质检（过期检测/缺口分析）")
+@click.option(
+    "--parallel",
+    is_flag=True,
+    default=False,
+    help="并行摄入（多线程加速大批量文件处理）",
+)
+@click.option(
+    "--workers",
+    default=4,
+    type=click.IntRange(min=1, max=16),
+    show_default=True,
+    help="并行摄入的并发线程数",
+)
 def ingest(
     path: Path,
     chunk_size: int,
     chunk_overlap: int,
     extract: bool,
     quality: bool,
+    parallel: bool,
+    workers: int,
 ) -> None:
     """摄入文档 — 加载、分块、向量化、抽取、存储."""
     from knowledge_agent.agents.collection_agent import CollectionAgent
@@ -58,6 +73,54 @@ def ingest(
     from knowledge_agent.chunkers.recursive_chunker import RecursiveChunker
 
     console.print(f"[bold]Ingesting from: {path}[/bold]")
+
+    # 并行摄入：直接使用 CollectionAgent.ingest_path_parallel
+    if parallel:
+        from knowledge_agent.embeddings.embedder import Embedder
+
+        console.print(f"[dim]Parallel mode: {workers} workers[/dim]")
+        agent = CollectionAgent(
+            chunker=RecursiveChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap),
+        )
+        ingest_result = agent.ingest_path_parallel(path, max_workers=workers)
+
+        console.print(
+            f"  Loaded [green]{ingest_result.get('documents_loaded', 0)}[/green] document sections"
+        )
+        console.print(
+            f"  Created [green]{ingest_result.get('chunks_created', 0)}[/green] chunks"
+        )
+        console.print(
+            f"  Processed [green]{ingest_result.get('files_processed', 0)}[/green] files"
+        )
+
+        if extract:
+            try:
+                from knowledge_agent.agents.extraction_agent import ExtractionAgent
+
+                ext_agent = ExtractionAgent()
+                ext_result = ext_agent.build_graph_from_store(agent._vector_store)
+                console.print(
+                    f"  Extracted [green]{ext_result.get('entities_found', 0)}[/green] entities, "
+                    f"[green]{ext_result.get('relations_found', 0)}[/green] relations"
+                )
+            except Exception as exc:
+                console.print(f"[yellow]  Extraction skipped: {exc}[/yellow]")
+
+        if ingest_result.get("errors"):
+            console.print(
+                f"\n[yellow]{len(ingest_result['errors'])} error(s):[/yellow]"
+            )
+            for err in ingest_result["errors"]:
+                console.print(f"  {err.get('file', '?')}: {err['error']}")
+
+        console.print(
+            f"\n[bold green]Parallel ingest complete: "
+            f"{ingest_result.get('documents_loaded', 0)} docs → "
+            f"{ingest_result.get('chunks_created', 0)} chunks[/bold green]"
+        )
+        return
+
     chunker = RecursiveChunker(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,

@@ -40,6 +40,9 @@ export KA_EMBEDDING_MODEL="text-embedding-3-small"
 # 摄入文档
 ka ingest ./docs/
 
+# 并行摄入（多线程加速大批量文件）
+ka ingest ./docs/ --parallel --workers 4
+
 # 提问
 ka query "什么是 GraphRAG？"
 
