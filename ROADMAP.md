@@ -14,8 +14,10 @@
 | Phase 7 | 功能增强 | 多个分支 | ✅ 已合并 |
 | Phase 8 | 监控、性能与功能扩展 | 多个分支 | ✅ 已合并 |
 | Phase 9 | 主线稳定性与 CI 质量门禁 | `codex/phase9-quality-gates` | ✅ 已合并 |
-| Phase 10 | Docker 与本地部署 | `codex/phase10-container-deployment` | 🟡 实现完成，运行验收待执行 |
+| Phase 10 | Docker 与本地部署 | `codex/phase10-container-deployment` | ✅ 已合并 |
 | Phase 11-12 | 工作流、生产存储 | 见 `specs/` | 📋 规划中 |
+| 迭代 14-18 | 搜索增强 / 知识库管理 / 多模态 / 测试补全 / Docker+docs | 多个分支 | ✅ 已合并 |
+| 迭代 19-21 | CSV 导出 / 深色模式 / 统一错误格式 / 批量标签 / CLI parallel / API 测试 | 多个分支 | ✅ 已合并（#37/#38 待合并） |
 
 ---
 
@@ -116,9 +118,13 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 | 方向 | 完成内容 | 状态 |
 |------|----------|------|
 | 搜索增强 | Query Rewriting、HyDE、多查询融合 | ✅ 已完成 |
-| 知识库搜索/浏览 | 文档搜索与标签管理 | ✅ 已完成 |
-| 知识库导出 | Markdown / JSON 导出 | ✅ 已完成 |
+| 知识库搜索/浏览 | 文档搜索与标签管理（含批量标签） | ✅ 已完成 |
+| 知识库导出 | Markdown / JSON / CSV 导出 | ✅ 已完成 |
 | 多模态支持 | 图片加载与 OCR 能力 | ✅ 已完成 |
+| Web UI 增强 | 深色模式、进度条、版本历史 | ✅ 已完成 |
+| API 改进 | 统一错误响应格式 | ✅ 已完成 |
+| CLI 增强 | `ingest --parallel` 并行摄入 | 🟡 PR #37 待合并 |
+| 测试补全 | 缓存/CLI/配置/导出/API/端到端测试 | ✅ 已完成（#38 待合并） |
 
 ---
 
@@ -145,7 +151,7 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 
 | Phase | 方向 | Spec |
 |------|------|------|
-| Phase 10 | Docker 与本地部署 | [`specs/phase-10-container-deployment/`](specs/phase-10-container-deployment/) |
+| Phase 10 | Docker 与本地部署 | [`specs/phase-10-container-deployment/`](specs/phase-10-container-deployment/) | ✅ 已合并 |
 | Phase 11 | 可恢复的工作流编排 | [`specs/phase-11-workflow-orchestration/`](specs/phase-11-workflow-orchestration/) |
 | Phase 12 | 生产级存储适配 | [`specs/phase-12-production-storage/`](specs/phase-12-production-storage/) |
 
@@ -162,6 +168,17 @@ PLAN.md 中定义的 5 个 Phase，从 MVP 到完整系统。
 | `feature/web-ui` | Web UI | 1 | ✅ 已合并 |
 | `feature/polish` | 打磨完善 | 10 | ✅ 已合并 |
 | `feature/monitoring` | 监控与可观测性 | 1 | ✅ 已合并 |
-| `feature/performance` | 性能优化与缓存 | 1 | ✅ 已合并 |
+| `feature/performance` | 性能优化与缓存 | 5 | ✅ 已合并 |
+| `feature/multimodal` | 多模态支持 | 1 | ✅ 已合并 |
+| `feature/kb-management` | 知识库管理 | 1 | ✅ 已合并 |
+| `feature/test-coverage` | 测试补全 | 6 | ✅ 已合并 |
+| `fix/exporter-path-sanitize` | 导出文件名安全修复 | 1 | ✅ 已合并 |
+| `chore/final-tasks` | Docker + 文档 | 1 | ✅ 已合并 |
 | `codex/phase9-quality-gates` | 主线稳定性与 CI | 5 | ✅ 已合并 |
-| `codex/phase10-container-deployment` | Docker 与本地部署 | 当前开发 | 🟡 实现完成，运行验收待执行 |
+| `codex/phase10-container-deployment` | Docker 与本地部署 | 当前开发 | ✅ 已合并 |
+| `feat/export-csv` | CSV 导出 | 1 | ✅ 已合并 |
+| `feat/dark-mode` | 深色模式 | 2 | ✅ 已合并 |
+| `fix/api-error-response` | 统一错误格式 | 1 | ✅ 已合并 |
+| `feat/batch-tags` | 批量标签管理 | 2 | ✅ 已合并 |
+| `feat/cli-parallel` | CLI 并行摄入 | 1 | 🟡 PR #37 待合并 |
+| `test/api-behavior` | API 行为测试 | 1 | 🟡 PR #38 待合并 |
