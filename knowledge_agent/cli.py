@@ -76,8 +76,6 @@ def ingest(
 
     # 并行摄入：直接使用 CollectionAgent.ingest_path_parallel
     if parallel:
-        from knowledge_agent.embeddings.embedder import Embedder
-
         console.print(f"[dim]Parallel mode: {workers} workers[/dim]")
         agent = CollectionAgent(
             chunker=RecursiveChunker(chunk_size=chunk_size, chunk_overlap=chunk_overlap),
