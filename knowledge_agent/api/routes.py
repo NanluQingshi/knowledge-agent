@@ -238,6 +238,12 @@ def create_app() -> FastAPI:
     @app.post("/query", response_model=QueryResponse)
     async def query_endpoint(req: QueryRequest):
         """问答查询."""
+        from knowledge_agent.storage.vector_store import VectorStore
+
+        # 空库时返回 404，避免 BM25 未构建的 RuntimeError
+        if VectorStore().count() == 0:
+            raise HTTPException(status_code=404, detail="No documents ingested yet")
+
         orchestrator = _get_orchestrator()
         result = orchestrator.run_query(req.question, top_k=req.top_k)
 
